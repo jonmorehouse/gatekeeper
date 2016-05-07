@@ -101,10 +101,10 @@ func main() {
 	var wg sync.WaitGroup
 	for _, server := range servers {
 		wg.Add(1)
-		go func() {
+		go func(server Server) {
 			server.Run()
 			wg.Done()
-		}()
+		}(server)
 	}
 
 	// configure a signal handler which will pass along signals to each
