@@ -11,10 +11,10 @@ DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 
 cd "$DIR"
 
-
 if [[ $GATEKEEPER_DEV = "1" ]]; then
   echo "building gatekeeper in dev mode..."
   go build -o bins/gatekeeper .
+  ln -sf "$DIR/bins/gatekeeper" $GOPATH/bin/gatekeeper
 else
   echo "non-dev not supported yet..."
   exit 1

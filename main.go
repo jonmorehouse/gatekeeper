@@ -3,12 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/tylerb/graceful"
 )
 
 const (
@@ -18,8 +21,8 @@ const (
 
 type Server interface {
 	Run()          // blocking function which waits on the server to run and finish
-	Exit()         // exit the service
-	GracefulExit() //
+	Exit()         // exit the server immediately
+	GracefulExit() // gracefully exit from the service
 }
 
 type ServerConfig struct {
@@ -30,37 +33,45 @@ type ServerConfig struct {
 
 type HTTPServer struct {
 	config *ServerConfig
-
-	// temp for debugging
-	stopped bool
+	server *graceful.Server
 }
 
 func NewHTTPServer(config *ServerConfig) Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(rw http.ResponseWriter, req *http.Request) {
+		fmt.Println("here")
+		time.Sleep(time.Second * 8)
+		rw.WriteHeader(200)
+		fmt.Fprintf(rw, "ping")
+	})
+
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", config.ListenPort),
+		Handler:      mux,
+		ReadTimeout:  time.Second * 10,
+		WriteTimeout: time.Second * 10,
+	}
 	return &HTTPServer{
 		config: config,
+		server: &graceful.Server{
+			Server:           server,
+			NoSignalHandling: true,
+		},
 	}
 }
 
 func (h *HTTPServer) Run() {
-	for {
-		if h.stopped {
-			break
-		}
-
-		time.Sleep(time.Second)
-	}
-
+	h.server.ListenAndServe()
 }
 
 func (h *HTTPServer) Exit() {
-	fmt.Println("stopping")
-	h.stopped = true
-
+	fmt.Println("Exiting immediately...")
+	h.server.Stop(time.Second * 0)
 }
 
 func (h *HTTPServer) GracefulExit() {
-	fmt.Println("gracefully stopping")
-	h.stopped = true
+	fmt.Println("Gracefully exiting...")
+	h.server.Stop(time.Second * 20)
 }
 
 func main() {
