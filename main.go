@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 	"github.com/tylerb/graceful"
 )
 
@@ -37,20 +38,13 @@ type HTTPServer struct {
 }
 
 func NewHTTPServer(config *ServerConfig) Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(rw http.ResponseWriter, req *http.Request) {
-		fmt.Println("here")
-		time.Sleep(time.Second * 8)
-		rw.WriteHeader(200)
-		fmt.Fprintf(rw, "ping")
-	})
-
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", config.ListenPort),
-		Handler:      mux,
+		Handler:      gatekeeper.NewProxier(0),
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 	}
+	fmt.Println(server.Addr)
 	return &HTTPServer{
 		config: config,
 		server: &graceful.Server{
@@ -93,7 +87,7 @@ func main() {
 	publicHostNames = strings.Split(*rawPublicHostNames, ",")
 	internalHostNames = strings.Split(*rawInternalHostNames, ",")
 
-	// TODO add support to handle errors being passed back!
+	// TODO: configuration and "building" of proxy servers should be abstracted and robustness added
 	internalHTTPConfig := ServerConfig{
 		Protocol:   HTTP_INTERNAL,
 		HostNames:  internalHostNames,
@@ -101,10 +95,11 @@ func main() {
 	}
 	internalHTTPServer := NewHTTPServer(&internalHTTPConfig)
 
+	// TODO: configuration and "building" of proxy servers should be abstracted and robustness added
 	publicHTTPConfig := ServerConfig{
 		Protocol:   HTTP_PUBLIC,
 		HostNames:  publicHostNames,
-		ListenPort: internalHTTPPort,
+		ListenPort: publicHTTPPort,
 	}
 	publicHTTPServer := NewHTTPServer(&publicHTTPConfig)
 

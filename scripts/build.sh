@@ -11,11 +11,23 @@ DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 
 cd "$DIR"
 
+if [[ $GATEKEEPER_DEV = "1" || $GATEKEEPER_PLUGIN_DEV = "1" ]];then
+  if [[ ! -d "$GOPATH/src/github.com/jonmorehouse/gatekeeper" ]]; then
+    echo "symlinking current source into $GOPATH/src/github.com/jonmorehouse/gatekeeper ..."
+    mkdir -p "$GOPATH/src/github.com/jonmorehouse"
+    ln -sf "$DIR" "$GOPATH/src/github.com/jonmorehouse/gatekeeper"
+  fi
+fi
+
 if [[ $GATEKEEPER_DEV = "1" ]]; then
   echo "building gatekeeper in dev mode..."
   go build -o bins/gatekeeper .
   ln -sf "$DIR/bins/gatekeeper" $GOPATH/bin/gatekeeper
-else
-  echo "non-dev not supported yet..."
-  exit 1
+fi
+
+if [[ $GATEKEEPER_PLUGIN_DEV = "1" ]];then
+  echo "building gatekeeper plugins in dev mode..."
+  cd plugins/static-upstreams
+  go build -o "$DIR/bins/plugin-static-upstreams"
+  ln -sf "$DIR/bins/plugin-static-upstreams" $GOPATH/bin/plugin-static-upstreams
 fi
