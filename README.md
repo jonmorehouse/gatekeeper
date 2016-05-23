@@ -6,13 +6,13 @@ A gatekeeper for SOA services
 
 ## Goals
 
-* routing 
+* routing
   - statically configurable
   - dynamically configurable with _eg: consul, etcd_
 
 * support for multiple protocols:
   - public HTTP
-  - internal, vpc HTTP
+  - internal - vpc HTTP
   - tcp
   - websockets
 
@@ -22,4 +22,23 @@ A gatekeeper for SOA services
   - request decoration
   - request logging / tracing
   - rate limiting
+
+## Terminology
+
+upstream-plugin
+  - discovers, registers and updates plugins
+  - responsible for healthchecks?
+
+balancer-plugin
+  - gets hooked with a set of 
+
+* Upstream
+  - a routable upstream, for instance "httpbin"
+  - has one or more backends
+
+* Backend
+  - a single instance of an upstream
+* Upstream Manager
+  - manages upstreams
+  - plugin based
 
