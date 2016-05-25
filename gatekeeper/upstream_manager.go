@@ -2,141 +2,109 @@ package gatekeeper
 
 import (
 	"fmt"
-	"log"
-	"sync"
 
 	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
-type InternalUpstreamManager interface {
+type UpstreamPlugin interface {
 	// start is used by the upstreamDirector to start a _connected_
 	// plugin's lifecycle. In most cases, this involves making an RPC call
 	// to the plugin and starting the "event flow" of upstream/backend info
 	// from the plugin to this struct.
 	Start() error
 	Stop() error
+
+	// TODO: add a Restart method to this interface
 }
 
-// UpstreamManager implements the upstream.Manager interface and as such, is
-// used as the "backend" behind callbacks from children plugins.
-type UpstreamManager struct {
-	plugin upstream.Plugin
+// UpstreamPublisher starts, maintains and wraps an UpstreamPlugin, accepting
+// events from the plugin. Each plugin event is serialized into the correct
+// type and published to the broadcaster type to ensure that all listeners
+// receive the message correctly.
+type UpstreamPluginPublisher struct {
+	opts        PluginOpts
+	plugin      upstream.Plugin
+	broadcaster EventBroadcaster
 
-	// internal store for storing upstreams and plugins
-	upstreams        map[upstream.UpstreamID]upstream.Upstream
-	upstreamBackends map[upstream.UpstreamID][]upstream.Backend
-
-	// we wrap a rwmutex around the internal state modifiers in this struct
-	// so as to handle multithreaded access from our plugin. In practice,
-	// this might not be necessary
-	sync.RWMutex
+	// keep a tally of the upstreams / plugins we've seen here
+	knownUpstreams map[upstream.UpstreamID]interface{}
+	knownBackends  map[upstream.BackendID]interface{}
 }
 
-func NewUpstreamManager(pluginOpts PluginOpts) (InternalUpstreamManager, error) {
-	manager := UpstreamManager{
-		upstreams:        make(map[upstream.UpstreamID]upstream.Upstream),
-		upstreamBackends: make(map[upstream.UpstreamID][]upstream.Backend),
-	}
-
-	pluginClient, err := upstream.NewClient(pluginOpts.Name, pluginOpts.Cmd)
+func NewUpstreamPluginPublisher(opts PluginOpts, broadcaster EventBroadcaster) (UpstreamPlugin, error) {
+	plugin, err := upstream.NewClient(opts.Name, opts.Cmd)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := pluginClient.Configure(pluginOpts.Opts); err != nil {
+	if err := plugin.Configure(opts.Opts); err != nil {
 		return nil, err
 	}
 
-	manager.plugin = pluginClient
-	return &manager, nil
+	return &UpstreamPluginPublisher{
+		broadcaster: broadcaster,
+		opts:        opts,
+		plugin:      plugin,
+	}, nil
 }
 
-func (m *UpstreamManager) Start() error {
-	if err := m.plugin.Start(m); err != nil {
+func (p *UpstreamPluginPublisher) Start() error {
+	if err := p.plugin.Start(p); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *UpstreamManager) Stop() error {
-	if err := m.plugin.Stop(); err != nil {
+func (p *UpstreamPluginPublisher) Stop() error {
+	if err := p.plugin.Stop(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *UpstreamManager) AddUpstream(u upstream.Upstream) (upstream.UpstreamID, error) {
-	// This method is called from upstream plugins and specifically is
-	// blocking on their end as tehy wait for a response from the RPC
-	// Client. This method will update the internal store and will ensure
-	// that we have returned the correct upstreamID or an error if the
-	// operation is invalid.
-	m.Lock()
-	defer m.Unlock()
+func (p *UpstreamPluginPublisher) AddUpstream(pluginUpstream upstream.Upstream) (upstream.UpstreamID, error) {
+	u := PluginUpstreamToUpstream(pluginUpstream, upstream.NilUpstreamID)
+	p.knownUpstreams[u.ID] = struct{}{}
 
-	if u.ID == upstream.NilUpstreamID {
-		u.ID = NewUpstreamID()
-	}
-
-	m.upstreams[u.ID] = u
-	return u.ID, nil
+	return u.ID, p.broadcaster.Publish(UpstreamEvent{
+		EventType:  UpstreamAdded,
+		Upstream:   u,
+		UpstreamID: u.ID,
+	})
 }
 
-func (m *UpstreamManager) RemoveUpstream(uID upstream.UpstreamID) error {
-	m.Lock()
-	defer m.Unlock()
-
-	if _, ok := m.upstreams[uID]; !ok {
-		return fmt.Errorf("Upstream does not exist")
+func (p *UpstreamPluginPublisher) RemoveUpstream(uID upstream.UpstreamID) error {
+	if _, ok := p.knownUpstreams[uID]; !ok {
+		return fmt.Errorf("Unknown upstream")
 	}
 
-	delete(m.upstreams, uID)
-	return nil
+	delete(p.knownUpstreams, uID)
+	return p.broadcaster.Publish(UpstreamEvent{
+		EventType:  UpstreamRemoved,
+		UpstreamID: uID,
+	})
 }
 
-func (m *UpstreamManager) AddBackend(uID upstream.UpstreamID, backend upstream.Backend) (upstream.BackendID, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	if _, ok := m.upstreams[uID]; !ok {
-		return upstream.NilBackendID, fmt.Errorf("Upstream does not exist. Please add upstream before adding backends...")
+func (p *UpstreamPluginPublisher) AddBackend(uID upstream.UpstreamID, pluginBackend upstream.Backend) (upstream.BackendID, error) {
+	if _, ok := p.knownUpstreams[uID]; !ok {
+		return upstream.NilBackendID, fmt.Errorf("Unknown upstream")
 	}
 
-	backend.ID = NewBackendID()
-	if _, ok := m.upstreamBackends[uID]; !ok {
-		m.upstreamBackends[uID] = make([]upstream.Backend, 0)
-	}
-	m.upstreamBackends[uID] = append(m.upstreamBackends[uID], backend)
-	return backend.ID, nil
+	backend := PluginBackendToBackend(pluginBackend, upstream.NilBackendID)
+	p.knownBackends[backend.ID] = struct{}{}
+	return backend.ID, p.broadcaster.Publish(UpstreamEvent{
+		EventType:  BackendAdded,
+		UpstreamID: uID,
+		BackendID:  backend.ID,
+		Backend:    backend,
+	})
 }
 
-func (m *UpstreamManager) RemoveBackend(bID upstream.BackendID) error {
-	m.Lock()
-	defer m.Unlock()
-
-	// meh I didn't design this very well ...
-	// maybe just use an associative array with uID / backendIDs instead?
-	for upstreamID, upstreamBackends := range m.upstreamBackends {
-		for index, backend := range upstreamBackends {
-			if backend.ID != bID {
-				continue
-			}
-			// remove this backend from the list of backends for this particular upstream.
-			m.upstreamBackends[upstreamID] = append(upstreamBackends[:index], upstreamBackends[index+1:]...)
-			return nil
-		}
+func (p *UpstreamPluginPublisher) RemoveBackend(bID upstream.BackendID) error {
+	if _, ok := p.knownBackends[bID]; !ok {
+		return fmt.Errorf("Unknown backend")
 	}
-
-	return fmt.Errorf("Backend not found")
-}
-
-func (m *UpstreamManager) TempFetch() (upstream.Upstream, upstream.Backend) {
-	log.Println("This is temporary until we build out Queryier interface ...")
-	m.RLock()
-	defer m.RUnlock()
-
-	for upstreamID, upstr := range m.upstreams {
-		return upstr, m.upstreamBackends[upstreamID][0]
-	}
-	return upstream.NilUpstream, upstream.NilBackend
+	return p.broadcaster.Publish(UpstreamEvent{
+		EventType: BackendRemoved,
+		BackendID: bID,
+	})
 }

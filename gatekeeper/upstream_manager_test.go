@@ -2,38 +2,50 @@ package gatekeeper
 
 import (
 	"testing"
-	"time"
+
+	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
-func Test__temp(t *testing.T) {
-	pluginOpts := PluginOpts{
-		Name: "static-upstreams",
-		Cmd:  "plugin-static-upstreams",
-		Opts: map[string]interface{}{
-			"test": "test",
-		},
+type testEventBroadcaster struct {
+	t *testing.T
+	EventBroadcaster
+
+	publishCalls      []Event
+	publishSideEffect func()
+	publishReturn     error
+}
+
+func (eb *testEventBroadcaster) Publish(event Event) error {
+	eb.publishCalls = append(eb.publishCalls, event)
+	if eb.publishSideEffect != nil {
+		eb.publishSideEffect()
 	}
-	um, err := NewUpstreamManager(pluginOpts)
-	if err != nil {
-		t.Fatalf(err.Error())
+	return eb.publishReturn
+}
+
+func NewTestEventBroadcaster() EventBroadcaster {
+	return &testEventBroadcaster{
+		publishCalls: make([]Event, 0),
+	}
+}
+
+func TestUpstreamManager__AddUpstream__Ok(t *testing.T) {
+	b := NewTestEventBroadcaster()
+	m := &UpstreamPluginPublisher{
+		broadcaster:    b,
+		knownUpstreams: make(map[upstream.UpstreamID]interface{}),
+		knownBackends:  make(map[upstream.BackendID]interface{}),
 	}
 
-	err = um.Start()
+	upstr := upstream.Upstream{}
+	id, err := m.AddUpstream(upstr)
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatalf("Invalid response for addUpstream")
 	}
-
-	t.Log("progress...")
-	time.Sleep(time.Second * 1)
-	upstreamManager := um.(*UpstreamManager)
-	upstr, backend := upstreamManager.TempFetch()
-	if upstr.Name != "httpbin" {
-		t.Fatalf("Invalid name")
+	if b.(*testEventBroadcaster).publishCalls[0].(UpstreamEvent).UpstreamID != id {
+		t.Fatalf("Invalid call to publish")
 	}
-	if backend.Address != "http://httpbin.org" {
-		t.Fatalf("Invalid address")
-	}
-	if err := um.Stop(); err != nil {
-		t.Fatalf("Stop erred out...")
+	if b.(*testEventBroadcaster).publishCalls[0].(UpstreamEvent).Upstream == nil {
+		t.Fatalf("Nil Upstream in UpstreamEvent")
 	}
 }
