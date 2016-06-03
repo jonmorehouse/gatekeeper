@@ -42,7 +42,7 @@ func TestUpstreamManager__AddUpstream__Ok(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invalid response for addUpstream")
 	}
-	if b.(*testEventBroadcaster).publishCalls[0].(UpstreamEvent).UpstreamID != id {
+	if b.(*testEventBroadcaster).publishCalls[0].(UpstreamEvent).UpstreamID != UpstreamID(id) {
 		t.Fatalf("Invalid call to publish")
 	}
 	if b.(*testEventBroadcaster).publishCalls[0].(UpstreamEvent).Upstream == nil {

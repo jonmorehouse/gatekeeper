@@ -3,8 +3,6 @@ package gatekeeper
 import (
 	"net/http"
 	"testing"
-
-	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
 type addCall struct {
@@ -82,7 +80,7 @@ func TestAsyncUpstreamRequester__UpstreamForRequest__findByPrefixUncached(t *tes
 		Upstream: &Upstream{
 			Hostnames: []string{"test"},
 		},
-		UpstreamID: upstream.UpstreamID("aaa"),
+		UpstreamID: UpstreamID("aaa"),
 		EventType:  UpstreamAdded,
 	}
 	upstrReq.(*AsyncUpstreamRequester).listenCh <- event

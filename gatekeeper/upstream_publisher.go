@@ -1,21 +1,6 @@
 package gatekeeper
 
-import (
-	"fmt"
-
-	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
-)
-
-type UpstreamPlugin interface {
-	// start is used by the upstreamDirector to start a _connected_
-	// plugin's lifecycle. In most cases, this involves making an RPC call
-	// to the plugin and starting the "event flow" of upstream/backend info
-	// from the plugin to this struct.
-	Start() error
-	Stop() error
-
-	// TODO: add a Restart method to this interface
-}
+import "fmt"
 
 // UpstreamPublisher starts, maintains and wraps an UpstreamPlugin, accepting
 // events from the plugin. Each plugin event is serialized into the correct
@@ -63,9 +48,9 @@ func (p *UpstreamPluginPublisher) Stop() error {
 
 func (p *UpstreamPluginPublisher) AddUpstream(pluginUpstream upstream.Upstream) (upstream.UpstreamID, error) {
 	u := PluginUpstreamToUpstream(pluginUpstream, upstream.NilUpstreamID)
-	p.knownUpstreams[u.ID] = struct{}{}
+	p.knownUpstreams[upstream.UpstreamID(u.ID)] = struct{}{}
 
-	return u.ID, p.broadcaster.Publish(UpstreamEvent{
+	return upstream.UpstreamID(u.ID), p.broadcaster.Publish(UpstreamEvent{
 		EventType:  UpstreamAdded,
 		Upstream:   u,
 		UpstreamID: u.ID,
@@ -80,7 +65,7 @@ func (p *UpstreamPluginPublisher) RemoveUpstream(uID upstream.UpstreamID) error 
 	delete(p.knownUpstreams, uID)
 	return p.broadcaster.Publish(UpstreamEvent{
 		EventType:  UpstreamRemoved,
-		UpstreamID: uID,
+		UpstreamID: UpstreamID(uID),
 	})
 }
 
@@ -90,10 +75,10 @@ func (p *UpstreamPluginPublisher) AddBackend(uID upstream.UpstreamID, pluginBack
 	}
 
 	backend := PluginBackendToBackend(pluginBackend, upstream.NilBackendID)
-	p.knownBackends[backend.ID] = struct{}{}
-	return backend.ID, p.broadcaster.Publish(UpstreamEvent{
+	p.knownBackends[upstream.BackendID(backend.ID)] = struct{}{}
+	return upstream.BackendID(backend.ID), p.broadcaster.Publish(UpstreamEvent{
 		EventType:  BackendAdded,
-		UpstreamID: uID,
+		UpstreamID: UpstreamID(uID),
 		BackendID:  backend.ID,
 		Backend:    backend,
 	})
@@ -105,6 +90,6 @@ func (p *UpstreamPluginPublisher) RemoveBackend(bID upstream.BackendID) error {
 	}
 	return p.broadcaster.Publish(UpstreamEvent{
 		EventType: BackendRemoved,
-		BackendID: bID,
+		BackendID: BackendID(bID),
 	})
 }

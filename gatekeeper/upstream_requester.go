@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
 type UpstreamRequester interface {
@@ -23,7 +21,7 @@ type AsyncUpstreamRequester struct {
 	listenCh    EventCh
 	stopCh      chan interface{}
 
-	knownUpstreams      map[upstream.UpstreamID]*Upstream
+	knownUpstreams      map[UpstreamID]*Upstream
 	upstreamsByHostname map[string]*Upstream
 	upstreamsByPrefix   map[string]*Upstream
 	sync.RWMutex
@@ -35,7 +33,7 @@ func NewAsyncUpstreamRequester(broadcaster EventBroadcaster) UpstreamRequester {
 		listenCh:    make(chan Event),
 		stopCh:      make(chan interface{}),
 
-		knownUpstreams:      make(map[upstream.UpstreamID]*Upstream),
+		knownUpstreams:      make(map[UpstreamID]*Upstream),
 		upstreamsByHostname: make(map[string]*Upstream),
 		upstreamsByPrefix:   make(map[string]*Upstream),
 	}
@@ -78,7 +76,7 @@ func (r *AsyncUpstreamRequester) listener() {
 }
 
 func (r *AsyncUpstreamRequester) addUpstream(event UpstreamEvent) {
-	if event.UpstreamID == upstream.NilUpstreamID {
+	if event.UpstreamID == NilUpstreamID {
 		log.Fatal("Received an invalid upstream event...")
 		return
 	}

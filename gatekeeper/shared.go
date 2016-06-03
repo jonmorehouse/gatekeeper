@@ -9,6 +9,18 @@ import (
 	"strings"
 )
 
+func Retry(f func() error, retries uint) error {
+	err := f()
+	if err == nil {
+		return nil
+	}
+
+	if count == 0 {
+		return err
+	}
+	return Retry(f, retries-1)
+}
+
 func RetryAndPanic(f func() error, retries uint) {
 	// retry a function n times before panicing and closing out the
 	// program. This should only be for exceptional cases
