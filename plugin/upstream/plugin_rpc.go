@@ -11,13 +11,18 @@ type ConfigureArgs struct {
 	Opts Opts
 }
 type ConfigureResp struct {
-	Error error
+	Err error
+}
+
+type HeartbeatArgs struct{}
+type HeartbeatResp struct {
+	Err error
 }
 
 type FetchUpstreamsArgs struct{}
 type FetchUpstreamsResp struct {
 	Upstreams []Upstream
-	Error     error
+	Err       error
 }
 
 type FetchUpstreamBackendsArgs struct {
@@ -26,7 +31,7 @@ type FetchUpstreamBackendsArgs struct {
 
 type FetchUpstreamBackendsResp struct {
 	Backends []Backend
-	Error    error
+	Err      error
 }
 
 type StartArgs struct {
@@ -34,43 +39,40 @@ type StartArgs struct {
 	ConnID uint32
 }
 type StartResp struct {
-	Error error
+	Err error
 }
 
 type StopArgs struct{}
 type StopResp struct {
-	Errors []error
+	Errs []error
 }
 
 // this is what the plugin is actually running behind the scenes
 type PluginRPCServer struct {
-	// this is the public Plugin that the user has created
-	plugin  Plugin
+	// impl is what Implements the public Plugin interface
+	impl    Plugin
 	broker  *plugin.MuxBroker
 	manager Manager
 }
 
 func (s *PluginRPCServer) Configure(args *ConfigureArgs, resp *ConfigureResp) error {
-	if err := s.plugin.Configure(args.Opts); err != nil {
-		resp.Error = err
+	if err := s.impl.Configure(args.Opts); err != nil {
+		resp.Err = err
 	}
 	return nil
 }
 
-func (s *PluginRPCServer) FetchUpstreams(args *FetchUpstreamsArgs, resp *FetchUpstreamsResp) error {
-	upstreams, err := s.plugin.FetchUpstreams()
-	resp.Upstreams = upstreams
-	resp.Error = err
+func (s *PluginRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) error {
+	rpcManager, ok := s.manager.(*ManagerRPCClient)
+	if !ok {
+		return fmt.Errorf("Fatal: upstreams plugin's RPCServer has an RPCClient with no HeartBeat method")
+	}
 
-	return nil
-}
+	if err := rpcManager.Heartbeat(); err != nil {
+		return err
+	}
 
-func (s *PluginRPCServer) FetchUpstreamBackends(args *FetchUpstreamBackendsArgs, resp *FetchUpstreamBackendsResp) error {
-	backends, err := s.plugin.FetchUpstreamBackends(args.UpstreamID)
-	resp.Backends = backends
-	resp.Error = err
-
-	return nil
+	return s.impl.Heartbeat()
 }
 
 func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
@@ -88,16 +90,15 @@ func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
 	manager := &ManagerRPCClient{
 		client: client,
 	}
+
 	// we call notify, so that the parent manager server can verify a
 	// connection was made. This is done in the background, and the manager
 	// server listens until it hears this call.
-	go func() {
-		manager.Notify()
-	}()
-	// Notify is not availably on the Manager interface and should not be called outside of any other context
-	s.manager = manager
+	go manager.Notify()
 
-	if err := s.plugin.Start(s.manager); err != nil {
+	// Notify is not availably on the Manager interface and should not be called from any other context
+	s.manager = manager
+	if err := s.impl.Start(s.manager); err != nil {
 		resp.Error = err
 	}
 	return nil
@@ -110,14 +111,14 @@ func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
 
 	// if the plugin stop fails, we pass that along upstream, but still try
 	// to make sure the connection is closed
-	if err := s.plugin.Stop(); err != nil {
-		resp.Errors = append(resp.Errors, err)
+	if err := s.impl.Stop(); err != nil {
+		resp.Errs = append(resp.Errors, err)
 	}
 
 	// the manager owns its connection to the RPCServer, we go ahead and
 	// try to close it. If it errs out, we actually care about it at the RPC level
-	if err := s.plugin.Stop(); err != nil {
-		resp.Errors = append(resp.Errors, err)
+	if err := s.impl.Stop(); err != nil {
+		resp.Errs = append(resp.Errors, err)
 	}
 
 	return nil
@@ -125,11 +126,25 @@ func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
 
 // this implements the RPC that gatekeeper will interact with ...
 type PluginRPCClient struct {
-	broker *plugin.MuxBroker
-	client *rpc.Client
+	broker  *plugin.MuxBroker
+	client  *rpc.Client
+	manager Manager
 }
 
-func (c *PluginRPCClient) Configure(opts Opts) error {
+// Configure the client and the server. Specifically, this requires that a Manager is passed in here
+func (c *PluginRPCClient) Configure(opts map[string]interface{}) error {
+	rawManager, ok := opts["manager"]
+	if !ok {
+		return fmt.Errorf("No manager was passed into the rpc client")
+	}
+
+	if manager, ok := rawManager.(Manager); !ok {
+		return fmt.Errorf("Manager was passed in, but it was not successfully cast to a Manager type")
+	}
+
+	c.manager = manager
+	delete(opts, "manager")
+
 	callArgs := ConfigureArgs{
 		Opts: opts,
 	}
@@ -139,34 +154,21 @@ func (c *PluginRPCClient) Configure(opts Opts) error {
 		return err
 	}
 
-	return callResp.Error
+	return callResp.Err
 }
 
-func (c *PluginRPCClient) FetchUpstreams() ([]Upstream, error) {
-	callArgs := FetchUpstreamsArgs{}
-	callResp := FetchUpstreamsResp{}
+func (c *PluginRPCClient) Heartbeat() error {
+	callArgs := HeartbeatArgs{}
+	callResp := HeartbeatResp{}
 
-	if err := c.client.Call("Plugin.FetchUpstreams", &callArgs, &callResp); err != nil {
-		return []Upstream{}, err
+	if err := c.client.Call("Plugin.Heartbeat", &callArgs, &callResp); err != nil {
+		return err
 	}
 
-	return callResp.Upstreams, callResp.Error
+	return callResp.Err
 }
 
-func (c *PluginRPCClient) FetchUpstreamBackends(upstreamID UpstreamID) ([]Backend, error) {
-	callArgs := FetchUpstreamBackendsArgs{
-		UpstreamID: upstreamID,
-	}
-	callResp := FetchUpstreamBackendsResp{}
-
-	if err := c.client.Call("Plugin.FetchUpstreamBackends", &callArgs, &callResp); err != nil {
-		return []Backend{}, err
-	}
-
-	return callResp.Backends, callResp.Error
-}
-
-func (c *PluginRPCClient) Start(manager Manager) error {
+func (c *PluginRPCClient) Start() error {
 	connID := c.broker.NextId()
 	callArgs := StartArgs{connID}
 	callResp := StartResp{}
@@ -176,7 +178,7 @@ func (c *PluginRPCClient) Start(manager Manager) error {
 	connectedCh := make(chan interface{})
 	go func() {
 		managerRPCServer := ManagerRPCServer{
-			impl:        manager,
+			impl:        c.manager,
 			connectedCh: connectedCh,
 		}
 		c.broker.AcceptAndServe(connID, &managerRPCServer)
@@ -193,7 +195,7 @@ func (c *PluginRPCClient) Start(manager Manager) error {
 	<-connectedCh
 	close(connectedCh)
 
-	return nil
+	return callResp.Err
 }
 
 func (c *PluginRPCClient) Stop() error {
@@ -204,5 +206,5 @@ func (c *PluginRPCClient) Stop() error {
 	}
 
 	c.client.Close()
-	return nil
+	return callResp.Err
 }

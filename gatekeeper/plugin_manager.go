@@ -44,12 +44,7 @@ func NewPluginManager(pluginType PluginType, opts PluginOpts, count uint) Plugin
 }
 
 func (p *pluginManager) Start() error {
-	multiError := &MultiError{}
-	for i := 0; i < p.count; i++ {
-		if err := plugin.Configure(p.opts.Opts); err != nil {
-			return err
-		}
-	}
+
 }
 
 func (p pluginManager) buildPlugin() (Plugin, error) {

@@ -33,14 +33,25 @@ func NewUpstreamPluginPublisher(opts PluginOpts, broadcaster EventBroadcaster) (
 }
 
 func (p *UpstreamPluginPublisher) Start() error {
-	if err := p.plugin.Start(p); err != nil {
+	if err := p.pluginManager.Start(); err != nil {
 		return err
 	}
+
+	// for each plugin, we call the SetupServer RPC connection
+	plugins, err := p.pluginManager.All()
+	if err != nil {
+		return err
+	}
+
+	for _, plugin := range plugins() {
+
+	}
+
 	return nil
 }
 
 func (p *UpstreamPluginPublisher) Stop() error {
-	if err := p.plugin.Stop(); err != nil {
+	if err := p.pluginManager.Stop(); err != nil {
 		return err
 	}
 	return nil

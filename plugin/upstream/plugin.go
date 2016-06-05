@@ -13,20 +13,19 @@ var Handshake = plugin.HandshakeConfig{
 	MagicCookieValue: "upstream",
 }
 
-type Opts map[string]interface{}
-
 // this is the interface that public plugins have to call
 type Plugin interface {
 	// configures the plugin with options from the parent machine
-	Configure(Opts) error
+	Configure(map[string]interface{}) error
 
 	FetchUpstreams() ([]Upstream, error)
 	FetchUpstreamBackends(UpstreamID) ([]Backend, error)
 
+	AddManager(Manager) error
+
 	// this method should start a background goroutine which will emit
 	// messages to the parent by calling methods on the manager type
-	Start(Manager) error
-
+	Start() error
 	// this should wait a maximum of N seconds ...
 	Stop() error
 }

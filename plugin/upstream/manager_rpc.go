@@ -8,7 +8,7 @@ type AddUpstreamArgs struct {
 
 type AddUpstreamResp struct {
 	UpstreamID UpstreamID
-	Error      error
+	Err        error
 }
 
 type RemoveUpstreamArgs struct {
@@ -16,7 +16,7 @@ type RemoveUpstreamArgs struct {
 }
 
 type RemoveUpstreamResp struct {
-	Error error
+	Err error
 }
 
 type AddBackendArgs struct {
@@ -26,7 +26,7 @@ type AddBackendArgs struct {
 
 type AddBackendResp struct {
 	BackendID BackendID
-	Error     error
+	Err       error
 }
 
 type RemoveBackendArgs struct {
@@ -34,8 +34,11 @@ type RemoveBackendArgs struct {
 }
 
 type RemoveBackendResp struct {
-	Error error
+	Err error
 }
+
+type HeartbeatArgs struct{}
+type HeartbeatResp struct{}
 
 type ManagerRPCClient struct {
 	client *rpc.Client
@@ -43,6 +46,16 @@ type ManagerRPCClient struct {
 
 func (c *ManagerRPCClient) Notify() error {
 	return c.client.Call("Plugin.Notify", new(interface{}), new(interface{}))
+}
+
+func (c *ManagerRPCClient) Heartbeat() error {
+	callArgs := HeartbeatArgs{}
+	callResp := HeartbeatResp{}
+
+	if err := c.client.Call("Plugin.Heartbeat", &callArgs, &callResp); err != nil {
+		return err
+	}
+	return callResp.Err
 }
 
 func (c *ManagerRPCClient) AddUpstream(upstream Upstream) (UpstreamID, error) {
@@ -55,7 +68,7 @@ func (c *ManagerRPCClient) AddUpstream(upstream Upstream) (UpstreamID, error) {
 		return NilUpstreamID, err
 	}
 
-	return callResp.UpstreamID, callResp.Error
+	return callResp.UpstreamID, callResp.Err
 }
 
 func (c *ManagerRPCClient) RemoveUpstream(upstreamID UpstreamID) error {
@@ -67,7 +80,7 @@ func (c *ManagerRPCClient) RemoveUpstream(upstreamID UpstreamID) error {
 	if err := c.client.Call("Plugin.RemoveUpstream", &callArgs, &callResp); err != nil {
 		return err
 	}
-	return callResp.Error
+	return callResp.Err
 }
 
 func (c *ManagerRPCClient) AddBackend(upstreamID UpstreamID, backend Backend) (BackendID, error) {
@@ -80,7 +93,7 @@ func (c *ManagerRPCClient) AddBackend(upstreamID UpstreamID, backend Backend) (B
 	if err := c.client.Call("Plugin.AddBackend", &callArgs, &callResp); err != nil {
 		return NilBackendID, err
 	}
-	return callResp.BackendID, callResp.Error
+	return callResp.BackendID, callResp.Err
 }
 
 func (c *ManagerRPCClient) RemoveBackend(backendID BackendID) error {
@@ -92,7 +105,7 @@ func (c *ManagerRPCClient) RemoveBackend(backendID BackendID) error {
 	if err := c.client.Call("Plugin.RemoveBackend", &callArgs, &callResp); err != nil {
 		return err
 	}
-	return callResp.Error
+	return callResp.Err
 }
 
 type ManagerRPCServer struct {
@@ -105,28 +118,32 @@ func (s *ManagerRPCServer) Notify(*interface{}, *interface{}) error {
 	return nil
 }
 
+func (s *ManagerRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) error {
+	return nil
+}
+
 func (s *ManagerRPCServer) AddUpstream(args *AddUpstreamArgs, resp *AddUpstreamResp) error {
 	upstreamID, err := s.impl.AddUpstream(args.Upstream)
 	resp.UpstreamID = upstreamID
-	resp.Error = err
+	resp.Err = err
 	return nil
 }
 
 func (s *ManagerRPCServer) RemoveUpstream(args *RemoveUpstreamArgs, resp *RemoveUpstreamResp) error {
 	err := s.impl.RemoveUpstream(args.UpstreamID)
-	resp.Error = err
+	resp.Err = err
 	return nil
 }
 
 func (s *ManagerRPCServer) AddBackend(args *AddBackendArgs, resp *AddBackendResp) error {
 	backendID, err := s.impl.AddBackend(args.UpstreamID, args.Backend)
-	resp.Error = err
+	resp.Err = err
 	resp.BackendID = backendID
 	return nil
 }
 
 func (s *ManagerRPCServer) RemoveBackend(args *RemoveBackendArgs, resp *RemoveBackendResp) error {
 	err := s.impl.RemoveBackend(args.BackendID)
-	resp.Error = err
+	resp.Err = err
 	return nil
 }
