@@ -5,10 +5,15 @@ type UpstreamID string
 var NilUpstreamID UpstreamID = ""
 var NilUpstream Upstream = Upstream{}
 
-type BackendID string
-
-var NilBackendID BackendID = ""
-var NilBackend Backend = Backend{}
+func NewUpstreamID() UpstreamID {
+	var uuid string
+	RetryAndPanic(func() error {
+		var err error
+		uuid, err = NewUUID()
+		return err
+	}, 3)
+	return UpstreamID(uuid)
+}
 
 type Upstream struct {
 	ID        UpstreamID
@@ -36,10 +41,4 @@ func (u Upstream) HasPrefix(name string) bool {
 	}
 
 	return false
-}
-
-type Backend struct {
-	ID          BackendID
-	Address     string
-	HealthCheck string
 }

@@ -33,19 +33,19 @@ func (s *StaticUpstreams) Stop() error {
 
 func (s *StaticUpstreams) worker() {
 	upstr := shared.Upstream{
-		ID:   shared.NilUpstreamID,
+		ID:   shared.NewUpstreamID(),
 		Name: "httpbin",
 	}
-	upstrID, err := s.manager.AddUpstream(upstr)
+	err := s.manager.AddUpstream(upstr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	upstr.ID = upstrID
 
 	backend := shared.Backend{
 		Address: "https://httpbin.org",
 	}
-	_, err = s.manager.AddBackend(upstrID, backend)
+
+	err = s.manager.AddBackend(upstr.ID, backend)
 	if err != nil {
 		log.Fatal(err)
 	}

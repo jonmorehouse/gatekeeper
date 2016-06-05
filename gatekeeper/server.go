@@ -1,50 +1,50 @@
 package gatekeeper
 
 import (
+	"io"
 	"net/http"
 	"time"
+
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type Server interface {
 	Start() error
-	HandleHTTP(http.ResponseWriter, *http.Request) error
+	ProxyHTTP(http.ResponseWriter, *http.Request) error
 	Stop(time.Duration) error
 }
 
-type ServerOpts struct {
-	ListenProtocol
-}
-
 type ProxyServer struct {
-	Protocol          ProtocolType
-	UpstreamRequester UpstreamRequester
-	BackendRequester  BackendRequester
-
-	// TODO add in the concept of request modifiers so that users can
-	// modify requests in the manner that they like
-	// RequestModifiers  []RequestModifiers
-	// ResponseModifiers []ResponseModifiers
+	protocol         shared.Protocol
+	upstreams        UpstreamRequester
+	loadBalancer     LoadBalancer
+	requestModifier  RequestModifier
+	responseModifier ResponseModifier
 }
 
 func NewProxyServer() Server {
 	return &ProxyServer{
-		Protocols: []ProtocolType{HTTPPublic, HTTPPrivate},
+		protocol: shared.HTTPPublic,
 	}
 }
 
-func (p *ProxyServer) Start() error {
+func (s *ProxyServer) Start() error {
 	return nil
 }
 
-func (p *ProxyServer) Stop(time.Duration) error {
+func (s *ProxyServer) Stop(time.Duration) error {
 	return nil
 }
 
-func (p *ProxyServer) ProxyHTTP(rw http.ResponseWeriter, req *http.Request) error {
-	// pass
+func (s *ProxyServer) ProxyHTTP(rw http.ResponseWriter, req *http.Request) error {
+	upstream, _ := s.upstreams.UpstreamForRequest(req)
+	backend, _ := s.loadBalancer.GetBackend(upstream)
+
+	io.WriteString(rw, backend.Address)
+	return nil
 }
 
-// TODO figure out the ProxyTCP signature
-func (p *ProxyServer) ProxyTCP() error {
-
+func (s *ProxyServer) ProxyTCP() error {
+	panic("not yet implemented...")
+	return nil
 }

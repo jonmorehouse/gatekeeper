@@ -7,7 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
+	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
+	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
 type PluginManager interface {
@@ -18,6 +19,9 @@ type PluginManager interface {
 
 	// fetches a reference to a plugin
 	Get() (Plugin, error)
+
+	// fetch all references to all plugins
+	All() ([]Plugin, error)
 }
 
 type pluginManager struct {
@@ -44,20 +48,46 @@ func NewPluginManager(pluginType PluginType, opts PluginOpts, count uint) Plugin
 }
 
 func (p *pluginManager) Start() error {
-	//
-}
+	// starts and configures the plugins so that they work correctly
+	errs := NewAsyncMultiError()
+	var wg sync.WaitGroup
+	defer wg.Wait()
 
-func (p pluginManager) buildPlugin() (Plugin, error) {
-	switch p.pluginType {
-	case UpstreamPlugin:
-		plugin, err := upstream.NewClient(p.opts.Name, p.opts.Cmd)
+	for i := uint(0); i < p.count; i++ {
+		wg.Add(1)
+		instance, err := p.buildPlugin()
 		if err != nil {
-			return nil, err
+			errs.Add(err)
+			wg.Done()
+			continue
 		}
-	default:
+
+		go func(plugin Plugin) {
+			defer wg.Done()
+
+			if err := plugin.Configure(p.opts.Opts); err != nil {
+				errs.Add(err)
+				return
+			}
+
+			if err := plugin.Start(); err != nil {
+				errs.Add(err)
+			}
+		}(instance)
 	}
 
-	return nil, fmt.Errorf("Unsupported plugin type...")
+	return errs.ToErr()
+}
+
+func (m pluginManager) buildPlugin() (Plugin, error) {
+	if m.pluginType == UpstreamPlugin {
+		return upstream_plugin.NewClient(m.opts.Name, m.opts.Cmd)
+	}
+	if m.pluginType == LoadBalancerPlugin {
+		return loadbalancer_plugin.NewClient(m.opts.Name, m.opts.Cmd)
+	}
+
+	return nil, fmt.Errorf("INVALID_PLUGIN_TYPE")
 }
 
 func (p *pluginManager) Stop(duration time.Duration) error {
@@ -81,15 +111,16 @@ func (p *pluginManager) Stop(duration time.Duration) error {
 	for {
 		select {
 		case <-doneCh:
-			break // finished
-		case time.Now().After(timeout):
-			errs.Add(fmt.Errorf("Timed out waiting for plugins to stop..."))
-			break
+			return errs.ToErr()
 		default:
+			if time.Now().After(timeout) {
+				errs.Add(fmt.Errorf("Timed out waiting for plugins to stop..."))
+				return errs.ToErr()
+			}
 		}
 	}
 
-	return errs
+	return errs.ToErr()
 }
 
 func (p *pluginManager) Get() (Plugin, error) {

@@ -35,7 +35,7 @@ type AsyncMultiError struct {
 	sync.RWMutex
 }
 
-func NewMultiError() *AsyncMultiError {
+func NewAsyncMultiError() *AsyncMultiError {
 	return &AsyncMultiError{}
 }
 

@@ -1,4 +1,4 @@
-package main
+package gatekeeper
 
 import (
 	"fmt"
@@ -16,9 +16,9 @@ type Options struct {
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	LoadbalancerPlugins []string
+	LoadBalancerPlugins []string
 	// number of instances to run
-	LoadbalancerPluginsCount uint
+	LoadBalancerPluginsCount uint
 	// Opts to be passed along to plugin. Not currently used
 	LoadBalancerPluginOpts map[string]interface{}
 
@@ -41,8 +41,8 @@ type Options struct {
 	// Ports to start servers listening on. If not provided, the server
 	// will not be started. If collisions are detected, then this will
 	// error out.
-	HttpPublicPort   uint
-	HttpInternalPort uint
+	HTTPPublicPort   uint
+	HTTPInternalPort uint
 	TCPPublicPort    uint
 	TCPInternalPort  uint
 }
@@ -55,7 +55,7 @@ func ValidatePlugins(paths []string) ([]string, error) {
 		if fullpath, err := exec.LookPath(path); err != nil {
 			errs.Add(err)
 		} else {
-			validPaths = append(fullpath, path)
+			validPaths = append(validPaths, fullpath)
 		}
 	}
 

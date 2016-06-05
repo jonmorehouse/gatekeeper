@@ -9,7 +9,7 @@ type PluginOpts struct {
 type Plugin interface {
 	Start() error
 	Stop() error
-	Configure(PluginOpts) error
+	Configure(map[string]interface{}) error
 }
 
 type PluginType uint

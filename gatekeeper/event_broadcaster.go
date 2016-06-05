@@ -3,6 +3,8 @@ package gatekeeper
 import (
 	"fmt"
 	"sync"
+
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type EventType uint
@@ -41,10 +43,10 @@ type EventBroadcaster interface {
 
 type UpstreamEvent struct {
 	EventType  EventType
-	Upstream   *Upstream
-	UpstreamID UpstreamID
-	Backend    *Backend
-	BackendID  BackendID
+	Upstream   shared.Upstream
+	UpstreamID shared.UpstreamID
+	Backend    shared.Backend
+	BackendID  shared.BackendID
 }
 
 func (u UpstreamEvent) Type() EventType {

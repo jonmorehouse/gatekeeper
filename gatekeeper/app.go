@@ -1,27 +1,43 @@
 package gatekeeper
 
+import (
+	"log"
+	"time"
+)
+
 type App struct {
-	broadcaster Broadcaster
+	servers []*Server
 
-	// upstreamPublisher publishes messages from upstreamPlugins back to
-	// the broadcaster
-	upstreamPlugins   PluginManager
-	upstreamPublisher Publisher
+	broadcaster         EventBroadcaster
+	upstreamPlugins     []PluginManager
+	loadBalancerPlugins []PluginManager
+}
 
-	// LoadBalancer listens to events from the Broadcaster and updates
-	// backendPlugins with the correct state. This type also surfaces
-	// backends in the request lifecycle, by proxying to the loadbalancer
-	// plugins.
-	loadbalancer        LoadBalancer
-	loadbalancerPlugins PluginManager
+func New(options Options) (*App, error) {
+	if err := options.Validate(); err != nil {
+		return nil, err
+	}
 
-	// RequestModifier is used to modify a request before proxying it to
-	// the backend specified.
-	requestModifier        RequestModifier
-	requestModifierPlugins PluginManager
+	broadcasters := NewUpstreamEventBroadcaster()
+	upstreamPlugins
 
-	// ResponseModifier is used to modify a response before returning the
-	// response to the client.
-	responseModifier        ResponseModifier
-	responseModifierPlugins PluginManager
+	return &App{
+		servers:             servers,
+		broadcaster:         broadcaster,
+		upstreamPlugins:     upstreamPlugins,
+		loadBalancerPlugins: loadBalancerPlugins,
+	}, nil
+}
+
+func (a *App) Start() error {
+	for {
+		log.Println("here")
+		time.Sleep(time.Second)
+	}
+	return nil
+}
+
+func (a *App) Stop(duration time.Duration) error {
+
+	return nil
 }

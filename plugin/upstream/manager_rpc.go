@@ -11,8 +11,7 @@ type AddUpstreamArgs struct {
 }
 
 type AddUpstreamResp struct {
-	UpstreamID shared.UpstreamID
-	Err        error
+	Err error
 }
 
 type RemoveUpstreamArgs struct {
@@ -29,8 +28,7 @@ type AddBackendArgs struct {
 }
 
 type AddBackendResp struct {
-	BackendID shared.BackendID
-	Err       error
+	Err error
 }
 
 type RemoveBackendArgs struct {
@@ -64,17 +62,17 @@ func (c *ManagerRPCClient) Heartbeat() error {
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddUpstream(upstream shared.Upstream) (shared.UpstreamID, error) {
+func (c *ManagerRPCClient) AddUpstream(upstream shared.Upstream) error {
 	callArgs := AddUpstreamArgs{
 		Upstream: upstream,
 	}
 	callResp := AddUpstreamResp{}
 
 	if err := c.client.Call("Plugin.AddUpstream", &callArgs, &callResp); err != nil {
-		return shared.NilUpstreamID, err
+		return err
 	}
 
-	return callResp.UpstreamID, callResp.Err
+	return callResp.Err
 }
 
 func (c *ManagerRPCClient) RemoveUpstream(upstreamID shared.UpstreamID) error {
@@ -89,7 +87,7 @@ func (c *ManagerRPCClient) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) (shared.BackendID, error) {
+func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) error {
 	callArgs := AddBackendArgs{
 		UpstreamID: upstreamID,
 		Backend:    backend,
@@ -97,9 +95,9 @@ func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shar
 	callResp := AddBackendResp{}
 
 	if err := c.client.Call("Plugin.AddBackend", &callArgs, &callResp); err != nil {
-		return shared.NilBackendID, err
+		return err
 	}
-	return callResp.BackendID, callResp.Err
+	return callResp.Err
 }
 
 func (c *ManagerRPCClient) RemoveBackend(backendID shared.BackendID) error {
@@ -129,8 +127,7 @@ func (s *ManagerRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) e
 }
 
 func (s *ManagerRPCServer) AddUpstream(args *AddUpstreamArgs, resp *AddUpstreamResp) error {
-	upstreamID, err := s.impl.AddUpstream(args.Upstream)
-	resp.UpstreamID = upstreamID
+	err := s.impl.AddUpstream(args.Upstream)
 	resp.Err = err
 	return nil
 }
@@ -142,9 +139,8 @@ func (s *ManagerRPCServer) RemoveUpstream(args *RemoveUpstreamArgs, resp *Remove
 }
 
 func (s *ManagerRPCServer) AddBackend(args *AddBackendArgs, resp *AddBackendResp) error {
-	backendID, err := s.impl.AddBackend(args.UpstreamID, args.Backend)
+	err := s.impl.AddBackend(args.UpstreamID, args.Backend)
 	resp.Err = err
-	resp.BackendID = backendID
 	return nil
 }
 

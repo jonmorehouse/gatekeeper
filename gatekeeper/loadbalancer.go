@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
@@ -20,17 +21,17 @@ type LoadBalancerManager interface {
 }
 
 type LoadBalancerClient interface {
-	GetBackend(shared.UpstreamID) shared.Backend
+	GetBackend(*shared.UpstreamID) shared.Backend
 }
 
 type LoadBalancer struct {
 	// dependencies
-	broadcaster   Broadcaster
+	broadcaster   EventBroadcaster
 	pluginManager PluginManager
 
 	// internal
 	eventCh  EventCh
-	listenID ListenID
+	listenID EventListenerID
 	stopCh   chan interface{}
 }
 
@@ -38,7 +39,7 @@ func NewLoadBalancer(broadcaster EventBroadcaster, pluginManager PluginManager) 
 	return &LoadBalancer{
 		broadcaster:   broadcaster,
 		pluginManager: pluginManager,
-		listenCh:      make(ListenCh),
+		eventCh:       make(EventCh),
 		stopCh:        make(chan interface{}),
 	}
 }
@@ -57,10 +58,11 @@ func (l *LoadBalancer) Start() error {
 func (l *LoadBalancer) Stop(duration time.Duration) error {
 	timeout := time.Now().Add(duration)
 	errs := NewAsyncMultiError()
-	if err := l.RemoveListener(l.listenID); err != nil {
+	if err := l.broadcaster.RemoveListener(l.listenID); err != nil {
 		errs.Add(err)
 	}
 
+	doneCh := make(chan interface{})
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -90,12 +92,15 @@ func (l *LoadBalancer) Stop(duration time.Duration) error {
 		select {
 		case <-doneCh:
 			break
-		case time.Now().After(timeout):
-			errs.Add(fmt.Errorf("Did not stop quickly enough"))
 		default:
+			if time.Now().After(timeout) {
+				errs.Add(fmt.Errorf("Did not stop quickly enough"))
+				goto done
+			}
 		}
 	}
-	return nil
+done:
+	return errs.ToErr()
 }
 
 func (l *LoadBalancer) worker() {
@@ -108,22 +113,22 @@ func (l *LoadBalancer) worker() {
 			}
 			go l.handleEvent(upstreamEvent)
 		case <-l.stopCh:
-			l.stop <- struct{}{}
+			l.stopCh <- struct{}{}
 			return
 		}
 	}
 }
 
 func (l *LoadBalancer) handleEvent(event UpstreamEvent) {
-	var cb func(loadbalancer.Plugin) error
+	var cb func(loadbalancer_plugin.Plugin) error
 
 	switch event.EventType {
 	case BackendAdded:
-		cb = func(p Plugin) error {
+		cb = func(p loadbalancer_plugin.Plugin) error {
 			return p.AddBackend(event.UpstreamID, event.Backend)
 		}
 	case BackendRemoved:
-		cb = func(p Plugin) error {
+		cb = func(p loadbalancer_plugin.Plugin) error {
 			return p.RemoveBackend(event.Backend)
 		}
 	default:
@@ -139,18 +144,19 @@ func (l *LoadBalancer) handleEvent(event UpstreamEvent) {
 	errs := NewAsyncMultiError()
 	for _, plugin := range plugins {
 		wg.Add(1)
-		go func(p loadbalancer.Plugin) {
+
+		go func(p loadbalancer_plugin.Plugin) {
 			defer wg.Done()
-			if err := Retry(cb(p), 3); err != nil {
+			if err := Retry(func() error { return cb(p) }, 3); err != nil {
 				errs.Add(err)
 			}
-		}(plugin)
+		}(plugin.(loadbalancer_plugin.Plugin))
 	}
 
 	// TODO handle errors here ...
 }
 
-func (l *LoadBalancer) GetBackend(upstream shared.Upstream) (shared.Backend, error) {
+func (l *LoadBalancer) GetBackend(upstream *shared.Upstream) (shared.Backend, error) {
 	plugin, err := l.pluginManager.Get()
 	if err != nil {
 		return shared.NilBackend, err
@@ -158,5 +164,5 @@ func (l *LoadBalancer) GetBackend(upstream shared.Upstream) (shared.Backend, err
 
 	// NOTE we only pass along the UpstreamID because we don't want to send
 	// the entirety of the upstream over the wire each and every time.
-	return plugin.GetBackend(upstream.ID)
+	return plugin.(loadbalancer_plugin.Plugin).GetBackend(upstream.ID)
 }

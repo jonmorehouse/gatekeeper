@@ -3,6 +3,7 @@
 # Build gatekeeper for release or local development
 # This script will output binaries to the ./bin local directory
 # 
+set -e
 
 # Get the parent directory of this script, which is the `gatekeeper` repo
 SOURCE="${BASH_SOURCE[0]}"
@@ -15,7 +16,7 @@ cd "$DIR"
 # Development symlinks the current project into the proper gopath. This is done
 # so we can seamlessly reference different packages.
 # 
-if [[ $GATEKEEPER_DEV = "1" || $GATEKEEPER_PLUGIN_DEV = "1" ]];then
+if [[ $GATEKEEPER_DEV = "1" ]];then
   if [[ ! -d "$GOPATH/src/github.com/jonmorehouse/gatekeeper" ]]; then
     echo "symlinking current source into $GOPATH/src/github.com/jonmorehouse/gatekeeper ..."
     mkdir -p "$GOPATH/src/github.com/jonmorehouse"
@@ -24,10 +25,31 @@ if [[ $GATEKEEPER_DEV = "1" || $GATEKEEPER_PLUGIN_DEV = "1" ]];then
 fi
 
 # 
-# Build the main gatekeeper  
+# Build packages
+#
+echo "building shared package ..."
+cd "$DIR/shared"
+go build .
+
+
+echo "building plugin/upstream package ..."
+cd "$DIR/plugin/upstream"
+go build .
+
+echo "building plugin/loadbalancer package ..."
+cd "$DIR/plugin/upstream"
+go build .
+
+echo "building gatekeeper package ..."
+cd "$DIR/gatekeeper"
+go build .
+
+# 
+# Build the main gatekeeper application
 #
 if [[ $GATEKEEPER_DEV = "1" ]]; then
   echo "building gatekeeper in dev mode..."
+  cd "$DIR"
   go build -o bins/gatekeeper .
   ln -sf "$DIR/bins/gatekeeper" $GOPATH/bin/gatekeeper
 else

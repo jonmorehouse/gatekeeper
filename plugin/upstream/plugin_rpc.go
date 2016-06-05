@@ -5,7 +5,6 @@ import (
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type ConfigureArgs struct {
@@ -13,21 +12,6 @@ type ConfigureArgs struct {
 }
 type ConfigureResp struct {
 	Err error
-}
-
-type FetchUpstreamsArgs struct{}
-type FetchUpstreamsResp struct {
-	Upstreams []shared.Upstream
-	Err       error
-}
-
-type FetchUpstreamBackendsArgs struct {
-	UpstreamID shared.UpstreamID
-}
-
-type FetchUpstreamBackendsResp struct {
-	Backends []shared.Backend
-	Err      error
 }
 
 type StartArgs struct {
