@@ -1,9 +1,9 @@
 package shared
 
-type ProtocolType uint
+type Protocol uint
 
 const (
-	HTTPPublic ProtocolType = iota + 1
+	HTTPPublic Protocol = iota + 1
 	HTTPPrivate
 	TCPPublic
 	TCPPrivate

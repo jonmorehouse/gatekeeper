@@ -1,18 +1,22 @@
 package upstream
 
-import "net/rpc"
+import (
+	"net/rpc"
+
+	"github.com/jonmorehouse/gatekeeper/shared"
+)
 
 type AddUpstreamArgs struct {
-	Upstream Upstream
+	Upstream shared.Upstream
 }
 
 type AddUpstreamResp struct {
-	UpstreamID UpstreamID
+	UpstreamID shared.UpstreamID
 	Err        error
 }
 
 type RemoveUpstreamArgs struct {
-	UpstreamID UpstreamID
+	UpstreamID shared.UpstreamID
 }
 
 type RemoveUpstreamResp struct {
@@ -20,17 +24,17 @@ type RemoveUpstreamResp struct {
 }
 
 type AddBackendArgs struct {
-	UpstreamID UpstreamID
-	Backend    Backend
+	UpstreamID shared.UpstreamID
+	Backend    shared.Backend
 }
 
 type AddBackendResp struct {
-	BackendID BackendID
+	BackendID shared.BackendID
 	Err       error
 }
 
 type RemoveBackendArgs struct {
-	BackendID BackendID
+	BackendID shared.BackendID
 }
 
 type RemoveBackendResp struct {
@@ -38,7 +42,9 @@ type RemoveBackendResp struct {
 }
 
 type HeartbeatArgs struct{}
-type HeartbeatResp struct{}
+type HeartbeatResp struct {
+	Err error
+}
 
 type ManagerRPCClient struct {
 	client *rpc.Client
@@ -58,20 +64,20 @@ func (c *ManagerRPCClient) Heartbeat() error {
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddUpstream(upstream Upstream) (UpstreamID, error) {
+func (c *ManagerRPCClient) AddUpstream(upstream shared.Upstream) (shared.UpstreamID, error) {
 	callArgs := AddUpstreamArgs{
 		Upstream: upstream,
 	}
 	callResp := AddUpstreamResp{}
 
 	if err := c.client.Call("Plugin.AddUpstream", &callArgs, &callResp); err != nil {
-		return NilUpstreamID, err
+		return shared.NilUpstreamID, err
 	}
 
 	return callResp.UpstreamID, callResp.Err
 }
 
-func (c *ManagerRPCClient) RemoveUpstream(upstreamID UpstreamID) error {
+func (c *ManagerRPCClient) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	callArgs := RemoveUpstreamArgs{
 		UpstreamID: upstreamID,
 	}
@@ -83,7 +89,7 @@ func (c *ManagerRPCClient) RemoveUpstream(upstreamID UpstreamID) error {
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddBackend(upstreamID UpstreamID, backend Backend) (BackendID, error) {
+func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) (shared.BackendID, error) {
 	callArgs := AddBackendArgs{
 		UpstreamID: upstreamID,
 		Backend:    backend,
@@ -91,12 +97,12 @@ func (c *ManagerRPCClient) AddBackend(upstreamID UpstreamID, backend Backend) (B
 	callResp := AddBackendResp{}
 
 	if err := c.client.Call("Plugin.AddBackend", &callArgs, &callResp); err != nil {
-		return NilBackendID, err
+		return shared.NilBackendID, err
 	}
 	return callResp.BackendID, callResp.Err
 }
 
-func (c *ManagerRPCClient) RemoveBackend(backendID BackendID) error {
+func (c *ManagerRPCClient) RemoveBackend(backendID shared.BackendID) error {
 	callArgs := RemoveBackendArgs{
 		BackendID: backendID,
 	}

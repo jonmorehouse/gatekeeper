@@ -44,7 +44,7 @@ func NewPluginManager(pluginType PluginType, opts PluginOpts, count uint) Plugin
 }
 
 func (p *pluginManager) Start() error {
-
+	//
 }
 
 func (p pluginManager) buildPlugin() (Plugin, error) {

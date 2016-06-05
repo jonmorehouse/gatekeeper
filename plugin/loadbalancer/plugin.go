@@ -40,11 +40,11 @@ type PluginDispenser struct {
 }
 
 func (d PluginDispenser) Server(b *plugin.MuxBroker) (interface{}, error) {
-	return &PluginRPCServer{broker: b, impl: d.impl}, nil
+	return &RPCServer{broker: b, impl: d.impl}, nil
 }
 
 func (d PluginDispenser) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
-	return &PluginRPCClient{broker: b, client: c}, nil
+	return &RPCClient{broker: b, client: c}, nil
 }
 
 // This is the method that a plugin will call to start serving traffic over the

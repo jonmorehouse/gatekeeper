@@ -11,6 +11,10 @@ DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 
 cd "$DIR"
 
+#
+# Development symlinks the current project into the proper gopath. This is done
+# so we can seamlessly reference different packages.
+# 
 if [[ $GATEKEEPER_DEV = "1" || $GATEKEEPER_PLUGIN_DEV = "1" ]];then
   if [[ ! -d "$GOPATH/src/github.com/jonmorehouse/gatekeeper" ]]; then
     echo "symlinking current source into $GOPATH/src/github.com/jonmorehouse/gatekeeper ..."
@@ -19,15 +23,29 @@ if [[ $GATEKEEPER_DEV = "1" || $GATEKEEPER_PLUGIN_DEV = "1" ]];then
   fi
 fi
 
+# 
+# Build the main gatekeeper  
+#
 if [[ $GATEKEEPER_DEV = "1" ]]; then
   echo "building gatekeeper in dev mode..."
   go build -o bins/gatekeeper .
   ln -sf "$DIR/bins/gatekeeper" $GOPATH/bin/gatekeeper
+else
+  echo "building gatekeeper with release settings..."
+  exit 1
 fi
 
 if [[ $GATEKEEPER_PLUGIN_DEV = "1" ]];then
-  echo "building gatekeeper plugins in dev mode..."
-  cd plugins/static-upstreams
-  go build -o "$DIR/bins/plugin-static-upstreams"
-  ln -sf "$DIR/bins/plugin-static-upstreams" $GOPATH/bin/plugin-static-upstreams
+  echo "building each gatekeeper plugin in dev mode..."
+  for dir in `find $DIR/plugins -depth 1 -type d`; do
+    plugin_name=$(basename $dir)
+    echo "building $plugin_name plugin..."
+    cd $dir
+    go build -o "$DIR/bins/$plugin_name"
+    echo "symlinking $plugin_name to $GOPATH/bin/$plugin_name ..."
+    cd $DIR
+  done
+else
+  echo "building gatekeeper plugins with release settings..."
+  exit 1
 fi

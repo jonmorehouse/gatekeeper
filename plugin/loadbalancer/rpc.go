@@ -48,7 +48,8 @@ type GetBackendArgs struct {
 	Upstream shared.UpstreamID
 }
 type GetBackendResp struct {
-	Err error
+	Backend shared.Backend
+	Err     error
 }
 
 type RPCServer struct {
@@ -89,7 +90,7 @@ func (s *RPCServer) RemoveBackend(args *RemoveBackendArgs, resp *RemoveBackendRe
 }
 
 func (s *RPCServer) GetBackend(args *GetBackendArgs, resp *GetBackendResp) error {
-	resp.Err, resp.Backend = s.impl.GetBackend(args.Backend)
+	resp.Backend, resp.Err = s.impl.GetBackend(args.Upstream)
 	return nil
 }
 
@@ -159,13 +160,13 @@ func (c *RPCClient) RemoveBackend(backend shared.Backend) error {
 	return callResp.Err
 }
 
-func (c *RPCClient) GetBackend(upstream shared.UpstreamID) error {
+func (c *RPCClient) GetBackend(upstream shared.UpstreamID) (shared.Backend, error) {
 	callArgs := GetBackendArgs{
 		Upstream: upstream,
 	}
 	callResp := GetBackendResp{}
 	if err := c.client.Call("plugin.GetBackend", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NilBackend, callResp.Err
 	}
 	return callResp.Backend, callResp.Err
 }

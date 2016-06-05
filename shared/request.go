@@ -7,5 +7,6 @@ type Request struct {
 	Upstream Upstream
 	Backend  Backend
 	Err      error
-	Response NilResponse
+	// defaults to nil
+	Response Response
 }

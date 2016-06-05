@@ -5,32 +5,28 @@ import (
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type ConfigureArgs struct {
-	Opts Opts
+	Opts map[string]interface{}
 }
 type ConfigureResp struct {
 	Err error
 }
 
-type HeartbeatArgs struct{}
-type HeartbeatResp struct {
-	Err error
-}
-
 type FetchUpstreamsArgs struct{}
 type FetchUpstreamsResp struct {
-	Upstreams []Upstream
+	Upstreams []shared.Upstream
 	Err       error
 }
 
 type FetchUpstreamBackendsArgs struct {
-	UpstreamID UpstreamID
+	UpstreamID shared.UpstreamID
 }
 
 type FetchUpstreamBackendsResp struct {
-	Backends []Backend
+	Backends []shared.Backend
 	Err      error
 }
 
@@ -44,7 +40,7 @@ type StartResp struct {
 
 type StopArgs struct{}
 type StopResp struct {
-	Errs []error
+	Err error
 }
 
 // this is what the plugin is actually running behind the scenes
@@ -99,26 +95,28 @@ func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
 	// Notify is not availably on the Manager interface and should not be called from any other context
 	s.manager = manager
 	if err := s.impl.Start(s.manager); err != nil {
-		resp.Error = err
+		resp.Err = err
 	}
 	return nil
 }
 
 func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
 	if s.manager == nil {
-		return fmt.Errorf("Manager not started...")
+		resp.Err = fmt.Errorf("No manager configured")
+		return nil
 	}
 
 	// if the plugin stop fails, we pass that along upstream, but still try
 	// to make sure the connection is closed
 	if err := s.impl.Stop(); err != nil {
-		resp.Errs = append(resp.Errors, err)
+		resp.Err = err
+		return nil
 	}
 
 	// the manager owns its connection to the RPCServer, we go ahead and
 	// try to close it. If it errs out, we actually care about it at the RPC level
 	if err := s.impl.Stop(); err != nil {
-		resp.Errs = append(resp.Errors, err)
+		resp.Err = err
 	}
 
 	return nil
@@ -140,10 +138,10 @@ func (c *PluginRPCClient) Configure(opts map[string]interface{}) error {
 
 	if manager, ok := rawManager.(Manager); !ok {
 		return fmt.Errorf("Manager was passed in, but it was not successfully cast to a Manager type")
+	} else {
+		c.manager = manager
+		delete(opts, "manager")
 	}
-
-	c.manager = manager
-	delete(opts, "manager")
 
 	callArgs := ConfigureArgs{
 		Opts: opts,

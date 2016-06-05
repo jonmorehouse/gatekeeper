@@ -4,15 +4,16 @@ import (
 	"log"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
+	plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type StaticUpstreams struct {
-	manager upstream.Manager
+	manager plugin.Manager
 	stopCh  chan interface{}
 }
 
-func (s *StaticUpstreams) Configure(opts upstream.Opts) error {
+func (s *StaticUpstreams) Configure(map[string]interface{}) error {
 	return nil
 }
 
@@ -20,7 +21,7 @@ func (s *StaticUpstreams) Heartbeat() error {
 	return nil
 }
 
-func (s *StaticUpstreams) Start(manager upstream.Manager) error {
+func (s *StaticUpstreams) Start(manager plugin.Manager) error {
 	s.manager = manager
 	go s.worker()
 	return nil
@@ -31,8 +32,8 @@ func (s *StaticUpstreams) Stop() error {
 }
 
 func (s *StaticUpstreams) worker() {
-	upstr := upstream.Upstream{
-		ID:   upstream.NilUpstreamID,
+	upstr := shared.Upstream{
+		ID:   shared.NilUpstreamID,
 		Name: "httpbin",
 	}
 	upstrID, err := s.manager.AddUpstream(upstr)
@@ -41,7 +42,7 @@ func (s *StaticUpstreams) worker() {
 	}
 	upstr.ID = upstrID
 
-	backend := upstream.Backend{
+	backend := shared.Backend{
 		Address: "https://httpbin.org",
 	}
 	_, err = s.manager.AddBackend(upstrID, backend)
@@ -63,7 +64,7 @@ func main() {
 	staticUpstreams := StaticUpstreams{
 		stopCh: make(chan interface{}),
 	}
-	if err := upstream.RunPlugin("static-upstreams", &staticUpstreams); err != nil {
+	if err := plugin.RunPlugin("static-upstreams", &staticUpstreams); err != nil {
 		log.Fatal(err)
 	}
 }

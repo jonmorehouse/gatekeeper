@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
 
 	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 // implements the loadbalancer.LoadBalancer plugin that is exposed over RPC
 type LoadBalancer struct {
-	sync.RWLock
+	sync.RWMutex
 
 	upstreamBackends map[shared.UpstreamID][]shared.Backend
 }
@@ -26,7 +28,7 @@ func NewLoadBalancer() *LoadBalancer {
 func (l *LoadBalancer) Start() error                                { return nil }
 func (l *LoadBalancer) Stop() error                                 { return nil }
 func (l *LoadBalancer) Configure(opts map[string]interface{}) error { return nil }
-func (l *LoadBalancer) HeartBeat() error                            { return nil }
+func (l *LoadBalancer) Heartbeat() error                            { return nil }
 
 // actual implementation of methods used
 func (l *LoadBalancer) AddBackend(upstream shared.UpstreamID, backend shared.Backend) error {
@@ -48,7 +50,7 @@ func (l *LoadBalancer) RemoveBackend(deleted shared.Backend) error {
 			}
 
 			found = true
-			backends = append(backends[:idx], backend[idx+1:])
+			backends = append(backends[:idx], backends[idx+1:]...)
 			l.upstreamBackends[upstream] = backends
 			break
 		}
@@ -61,15 +63,15 @@ func (l *LoadBalancer) RemoveBackend(deleted shared.Backend) error {
 }
 
 func (l *LoadBalancer) GetBackend(upstream shared.UpstreamID) (shared.Backend, error) {
-	backends, found := l.upstreamBackends
+	backends, found := l.upstreamBackends[upstream]
 	if !found {
-		return fmt.Errorf("Upstream not found")
+		return shared.NilBackend, fmt.Errorf("Upstream not found")
 	} else if len(backends) == 0 {
-		return fmt.Errorf("No backends found")
+		return shared.NilBackend, fmt.Errorf("No backends found")
 	}
 
 	// pick a random backend for this upstream and return it
-	idx = rand.Intn(len(backends))
+	idx := rand.Intn(len(backends))
 	return backends[idx], nil
 }
 
