@@ -16,14 +16,8 @@ func (s *StaticUpstreams) Configure(opts upstream.Opts) error {
 	return nil
 }
 
-func (s *StaticUpstreams) FetchUpstreams() ([]upstream.Upstream, error) {
-	panic("this is not going to be supported per #10...")
-	return []upstream.Upstream{}, nil
-}
-
-func (s *StaticUpstreams) FetchUpstreamBackends(upstreamID upstream.UpstreamID) ([]upstream.Backend, error) {
-	panic("this is not going to be supported per #10...")
-	return []upstream.Backend{}, nil
+func (s *StaticUpstreams) Heartbeat() error {
+	return nil
 }
 
 func (s *StaticUpstreams) Start(manager upstream.Manager) error {
