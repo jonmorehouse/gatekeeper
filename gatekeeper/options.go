@@ -16,8 +16,8 @@ type Options struct {
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	LoadBalancerPlugins []string
-	// number of instances to run
+	LoadBalancerPlugin string
+	// number of instances to run of the loadBalancer
 	LoadBalancerPluginsCount uint
 	// Opts to be passed along to plugin. Not currently used
 	LoadBalancerPluginOpts map[string]interface{}
@@ -75,28 +75,14 @@ func (o *Options) Validate() error {
 		return fmt.Errorf("UPSTREAM_PLUGIN_COUNT_ZERO")
 	}
 
-	// verify that LoadBalancer plugins are configured correctly
-	if plugins, err := ValidatePlugins(o.LoadBalancerPlugins); err != nil {
+	if fullpath, err := exec.LookPath(o.LoadBalancerPlugin); err != nil {
 		errs.Add(err)
 	} else {
-		o.LoadBalancerPlugins = plugins
+		o.LoadBalancerPlugin = fullpath
 	}
+
 	if o.LoadBalancerPluginsCount == 0 {
 		return fmt.Errorf("LOAD_BALANCER_PLUGIN_COUNT_ZERO")
-	}
-
-	// verify that RequestModifier plugins are configured correctly
-	if plugins, err := ValidatePlugins(o.LoadBalancerPlugins); err != nil {
-		errs.Add(err)
-	} else {
-		o.LoadBalancerPlugins = plugins
-	}
-
-	// verify that ResponseModifier plugins are configured correctly
-	if plugins, err := ValidatePlugins(o.LoadBalancerPlugins); err != nil {
-		errs.Add(err)
-	} else {
-		o.LoadBalancerPlugins = plugins
 	}
 
 	return errs.ToErr()

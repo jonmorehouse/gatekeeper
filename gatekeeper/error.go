@@ -1,6 +1,9 @@
 package gatekeeper
 
-import "sync"
+import (
+	"bytes"
+	"sync"
+)
 
 type MultiError struct {
 	errors []error
@@ -18,7 +21,13 @@ func (m *MultiError) Add(err error) {
 }
 
 func (m MultiError) Error() string {
-	return "multi-error"
+	var buffer bytes.Buffer
+	for _, e := range m.errors {
+		buffer.WriteString(e.Error())
+		buffer.WriteString("\n")
+	}
+
+	return buffer.String()
 }
 
 func (m MultiError) ToErr() error {
@@ -46,7 +55,13 @@ func (m *AsyncMultiError) Add(err error) {
 }
 
 func (m *AsyncMultiError) Error() string {
-	return "async multi error"
+	var buffer bytes.Buffer
+	for _, e := range m.errors {
+		buffer.WriteString(e.Error())
+		buffer.WriteString("\n")
+	}
+
+	return buffer.String()
 }
 
 func (m *AsyncMultiError) ToErr() error {

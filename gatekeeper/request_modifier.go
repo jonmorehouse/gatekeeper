@@ -8,6 +8,10 @@ type RequestModifier interface {
 	Modify(*shared.Request) error
 }
 
+type RequestModifierClient interface {
+	Modify(*shared.Request) error
+}
+
 type LocalRequestModifier struct{}
 
 func (m *LocalRequestModifier) Modify(req *shared.Request) error {

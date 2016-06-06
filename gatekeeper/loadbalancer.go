@@ -15,16 +15,17 @@ import (
 // Broadcaster for the BackendRemoved and BackendAdded events and from there,
 // updating each instance of the plugin to ensure that all backend load
 // balancers have all the backends needed
-type LoadBalancerManager interface {
+type LoadBalancer interface {
 	Start() error
+	GetBackend(*shared.Upstream) (shared.Backend, error)
 	Stop(time.Duration) error
 }
 
 type LoadBalancerClient interface {
-	GetBackend(*shared.UpstreamID) shared.Backend
+	GetBackend(*shared.Upstream) (shared.Backend, error)
 }
 
-type LoadBalancer struct {
+type loadBalancer struct {
 	// dependencies
 	broadcaster   EventBroadcaster
 	pluginManager PluginManager
@@ -35,8 +36,8 @@ type LoadBalancer struct {
 	stopCh   chan interface{}
 }
 
-func NewLoadBalancer(broadcaster EventBroadcaster, pluginManager PluginManager) *LoadBalancer {
-	return &LoadBalancer{
+func NewLoadBalancer(broadcaster EventBroadcaster, pluginManager PluginManager) LoadBalancer {
+	return &loadBalancer{
 		broadcaster:   broadcaster,
 		pluginManager: pluginManager,
 		eventCh:       make(EventCh),
@@ -44,18 +45,24 @@ func NewLoadBalancer(broadcaster EventBroadcaster, pluginManager PluginManager) 
 	}
 }
 
-func (l *LoadBalancer) Start() error {
+func (l *loadBalancer) Start() error {
+	// start the loadBalancer plugins
+	if err := l.pluginManager.Start(); err != nil {
+		return err
+	}
+
+	// configure this object to receive the correct events from the
+	// EventBroadcaster and process them correctly.
 	listenID, err := l.broadcaster.AddListener(l.eventCh, []EventType{BackendAdded, BackendRemoved})
 	if err != nil {
 		return err
 	}
-
 	l.listenID = listenID
 	go l.worker()
 	return nil
 }
 
-func (l *LoadBalancer) Stop(duration time.Duration) error {
+func (l *loadBalancer) Stop(duration time.Duration) error {
 	timeout := time.Now().Add(duration)
 	errs := NewAsyncMultiError()
 	if err := l.broadcaster.RemoveListener(l.listenID); err != nil {
@@ -103,7 +110,7 @@ done:
 	return errs.ToErr()
 }
 
-func (l *LoadBalancer) worker() {
+func (l *loadBalancer) worker() {
 	for {
 		select {
 		case event := <-l.eventCh:
@@ -119,7 +126,7 @@ func (l *LoadBalancer) worker() {
 	}
 }
 
-func (l *LoadBalancer) handleEvent(event UpstreamEvent) {
+func (l *loadBalancer) handleEvent(event UpstreamEvent) {
 	var cb func(loadbalancer_plugin.Plugin) error
 
 	switch event.EventType {
@@ -152,11 +159,9 @@ func (l *LoadBalancer) handleEvent(event UpstreamEvent) {
 			}
 		}(plugin.(loadbalancer_plugin.Plugin))
 	}
-
-	// TODO handle errors here ...
 }
 
-func (l *LoadBalancer) GetBackend(upstream *shared.Upstream) (shared.Backend, error) {
+func (l *loadBalancer) GetBackend(upstream *shared.Upstream) (shared.Backend, error) {
 	plugin, err := l.pluginManager.Get()
 	if err != nil {
 		return shared.NilBackend, err

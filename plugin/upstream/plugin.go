@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"fmt"
 	"net/rpc"
 	"os/exec"
 
@@ -96,5 +97,9 @@ func NewClient(name string, cmd string) (PluginClient, error) {
 		return nil, err
 	}
 
-	return rawPlugin.(PluginClient), nil
+	pluginClient, ok := rawPlugin.(PluginClient)
+	if !ok {
+		return nil, fmt.Errorf("Unable to cast dispensed plugin into a PluginClient")
+	}
+	return pluginClient, nil
 }

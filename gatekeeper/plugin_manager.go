@@ -2,8 +2,8 @@ package gatekeeper
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 )
 
 type PluginManager interface {
-	// start all plugins
+	// start all plugins, running them in the background...
 	Start() error
 	// stop all instances of the plugin
 	Stop(time.Duration) error
@@ -26,24 +26,23 @@ type PluginManager interface {
 
 type pluginManager struct {
 	pluginType PluginType
-	opts       PluginOpts
+	pluginName string
+	pluginCmd  string
+	opts       map[string]interface{}
 
 	// count is the number of instances that this manager should manage for this plugin
 	count     uint
 	instances []Plugin
 }
 
-func NewPluginManager(pluginType PluginType, opts PluginOpts, count uint) PluginManager {
-	if count != 1 {
-		log.Fatal("PluginManager only supports a single plugin for now")
-		return nil
-	}
-
+func NewPluginManager(pluginCmd string, opts map[string]interface{}, count uint, pluginType PluginType) PluginManager {
 	return &pluginManager{
 		pluginType: pluginType,
+		pluginCmd:  pluginCmd,
+		pluginName: filepath.Base(pluginCmd),
 		opts:       opts,
-		count:      1,
-		instances:  make([]Plugin, 0, 1),
+		count:      count,
+		instances:  make([]Plugin, 0, count),
 	}
 }
 
@@ -61,15 +60,15 @@ func (p *pluginManager) Start() error {
 			wg.Done()
 			continue
 		}
+		p.instances = append(p.instances, instance)
 
 		go func(plugin Plugin) {
-			defer wg.Done()
-
-			if err := plugin.Configure(p.opts.Opts); err != nil {
+			if err := plugin.Configure(p.opts); err != nil {
 				errs.Add(err)
 				return
 			}
 
+			defer wg.Done()
 			if err := plugin.Start(); err != nil {
 				errs.Add(err)
 			}
@@ -81,10 +80,10 @@ func (p *pluginManager) Start() error {
 
 func (m pluginManager) buildPlugin() (Plugin, error) {
 	if m.pluginType == UpstreamPlugin {
-		return upstream_plugin.NewClient(m.opts.Name, m.opts.Cmd)
+		return upstream_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
 	if m.pluginType == LoadBalancerPlugin {
-		return loadbalancer_plugin.NewClient(m.opts.Name, m.opts.Cmd)
+		return loadbalancer_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
 
 	return nil, fmt.Errorf("INVALID_PLUGIN_TYPE")

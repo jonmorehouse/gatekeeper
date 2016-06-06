@@ -49,7 +49,7 @@ type ManagerRPCClient struct {
 }
 
 func (c *ManagerRPCClient) Notify() error {
-	return c.client.Call("Plugin.Notify", new(interface{}), new(interface{}))
+	return nil
 }
 
 func (c *ManagerRPCClient) Heartbeat() error {

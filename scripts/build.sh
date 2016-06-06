@@ -65,6 +65,7 @@ if [[ $GATEKEEPER_PLUGIN_DEV = "1" ]];then
     cd $dir
     go build -o "$DIR/bins/$plugin_name"
     echo "symlinking $plugin_name to $GOPATH/bin/$plugin_name ..."
+    ln -sf "$DIR/bins/$plugin_name" $GOPATH/bin/$plugin_name
     cd $DIR
   done
 else

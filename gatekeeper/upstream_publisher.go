@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
@@ -12,6 +13,11 @@ import (
 type Publisher interface {
 	Start() error
 	Stop(time.Duration) error
+}
+
+type UpstreamPublisherAndManager interface {
+	Publisher
+	upstream_plugin.Manager
 }
 
 // UpstreamPublisher starts, maintains and wraps an UpstreamPlugin, accepting
@@ -30,7 +36,7 @@ type UpstreamPublisher struct {
 	knownBackends  map[shared.BackendID]interface{}
 }
 
-func NewUpstreamPublisher(pluginManagers []PluginManager, broadcaster EventBroadcaster) Publisher {
+func NewUpstreamPublisher(pluginManagers []PluginManager, broadcaster EventBroadcaster) UpstreamPublisherAndManager {
 	return &UpstreamPublisher{
 		pluginManagers: pluginManagers,
 		broadcaster:    broadcaster,
@@ -41,7 +47,6 @@ func (p *UpstreamPublisher) Start() error {
 	errs := NewAsyncMultiError()
 
 	var wg sync.WaitGroup
-	defer wg.Wait()
 
 	// start all instances of all plugins (which is just 1 instance per
 	// unique plugin here)
@@ -54,6 +59,8 @@ func (p *UpstreamPublisher) Start() error {
 			}
 		}(manager)
 	}
+
+	wg.Wait()
 	return errs.ToErr()
 }
 
@@ -93,44 +100,60 @@ func (p *UpstreamPublisher) Stop(dur time.Duration) error {
 }
 
 func (p *UpstreamPublisher) AddUpstream(upstream shared.Upstream) error {
-	return p.broadcaster.Publish(UpstreamEvent{
+	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType:  UpstreamAdded,
 		Upstream:   upstream,
 		UpstreamID: upstream.ID,
 	})
+	if err != nil {
+		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+	}
+	return nil
 }
 
 func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	if _, ok := p.knownUpstreams[upstreamID]; !ok {
-		return fmt.Errorf("Unknown upstream")
+		return shared.NewError(fmt.Errorf("UPSTREAM_NOT_FOUND"))
 	}
 
 	delete(p.knownUpstreams, upstreamID)
-	return p.broadcaster.Publish(UpstreamEvent{
+	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType:  UpstreamRemoved,
 		UpstreamID: upstreamID,
 	})
+	if err != nil {
+		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+	}
+	return nil
 }
 
 func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) error {
 	if _, ok := p.knownUpstreams[upstreamID]; !ok {
-		return fmt.Errorf("Unknown upstream")
+		return shared.NewError(fmt.Errorf("UPSTREAM_NOT_FOUND"))
 	}
 
-	return p.broadcaster.Publish(UpstreamEvent{
+	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType:  BackendAdded,
 		UpstreamID: upstreamID,
 		BackendID:  backend.ID,
 		Backend:    backend,
 	})
+	if err != nil {
+		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+	}
+	return nil
 }
 
 func (p *UpstreamPublisher) RemoveBackend(backendID shared.BackendID) error {
 	if _, ok := p.knownBackends[backendID]; !ok {
-		return fmt.Errorf("Unknown backend")
+		return shared.NewError(fmt.Errorf("BACKEND_NOT_FOUND"))
 	}
-	return p.broadcaster.Publish(UpstreamEvent{
+	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType: BackendRemoved,
 		BackendID: backendID,
 	})
+	if err != nil {
+		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+	}
+	return nil
 }

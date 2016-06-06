@@ -78,7 +78,7 @@ func (l *LoadBalancer) GetBackend(upstream shared.UpstreamID) (shared.Backend, e
 func main() {
 	rand.Seed(time.Now().Unix())
 	loadBalancer := LoadBalancer{}
-	if err := loadbalancer_plugin.RunPlugin("loadbalancer", &loadBalancer); err != nil {
+	if err := loadbalancer_plugin.RunPlugin("simple-loadbalancer", &loadBalancer); err != nil {
 		log.Fatal(err)
 	}
 }

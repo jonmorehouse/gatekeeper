@@ -2,6 +2,7 @@ package upstream
 
 import (
 	"fmt"
+	"log"
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
@@ -36,6 +37,7 @@ type PluginRPCServer struct {
 }
 
 func (s *PluginRPCServer) Configure(args *ConfigureArgs, resp *ConfigureResp) error {
+	log.Println("RPC server configured")
 	if err := s.impl.Configure(args.Opts); err != nil {
 		resp.Err = err
 	}
@@ -81,6 +83,7 @@ func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
 	if err := s.impl.Start(s.manager); err != nil {
 		resp.Err = err
 	}
+
 	return nil
 }
 

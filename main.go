@@ -21,14 +21,14 @@ func parseJSONOpts(blob string) (map[string]interface{}, error) {
 func main() {
 	options := gatekeeper.Options{}
 
-	// UpstreamPlugins
+	// UpstreamPlugin configuration
 	upstreamPlugins := flag.String("upstream-plugins", "static-upstreams", "comma delimited list of plugin executables")
 	flag.UintVar(&options.UpstreamPluginsCount, "upstream-plugins-count", 1, "number of instances of each upstream plugin to operate")
 	upstreamPluginOpts := flag.String("upstream-plugins-opts", "{}", "json encoded options to be passed to each upstream plugin")
 
-	// LoadBalancerPlugins
-	loadBalancerPlugins := flag.String("loadbalancer-plugins", "simple-loadbalancer", "comma delimited list of load balancer plugin executables")
-	flag.UintVar(&options.UpstreamPluginsCount, "loadbalancer-plugins-count", 1, "number of instances of each loadbalancer plugin to operate")
+	// LoadBalancerPlugin configuration
+	flag.StringVar(&options.LoadBalancerPlugin, "loadbalancer-plugin", "simple-loadbalancer", "name of loadbalancer plugin to use")
+	flag.UintVar(&options.LoadBalancerPluginsCount, "loadbalancer-plugins-count", 1, "number of instances of each loadbalancer plugin to operate")
 	loadBalancerPluginOpts := flag.String("loadbalancer-plugins-opts", "{}", "json encoded options to be passed to each loadbalancer plugin")
 
 	// TODO RequestModifierPlugins
@@ -50,7 +50,6 @@ func main() {
 		log.Fatal("Invalid JSON for upstream-plugin-opts")
 	}
 
-	options.LoadBalancerPlugins = strings.Split(*loadBalancerPlugins, ",")
 	options.LoadBalancerPluginOpts, err = parseJSONOpts(*loadBalancerPluginOpts)
 	if err != nil {
 		log.Fatal("Invalid JSON for loadbalancer-plugin-opts")
@@ -77,4 +76,6 @@ func main() {
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
+
+	time.Sleep(time.Second * 10)
 }

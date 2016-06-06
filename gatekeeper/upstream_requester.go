@@ -12,8 +12,12 @@ import (
 
 type UpstreamRequester interface {
 	Start() error
-	Stop() error
+	Stop(time.Duration) error
 
+	UpstreamForRequest(*http.Request) (*shared.Upstream, error)
+}
+
+type UpstreamRequesterClient interface {
 	UpstreamForRequest(*http.Request) (*shared.Upstream, error)
 }
 
@@ -114,12 +118,12 @@ func (r *AsyncUpstreamRequester) removeUpstream(event UpstreamEvent) {
 	delete(r.knownUpstreams, event.UpstreamID)
 }
 
-func (r *AsyncUpstreamRequester) Stop() error {
+func (r *AsyncUpstreamRequester) Stop(duration time.Duration) error {
 	r.broadcaster.RemoveListener(r.listenID)
 	r.listenID = NilEventListenerID
 	r.stopCh <- struct{}{}
 
-	timeout := time.Now().Add(time.Second)
+	timeout := time.Now().Add(duration)
 	for {
 		select {
 		case <-r.stopCh:

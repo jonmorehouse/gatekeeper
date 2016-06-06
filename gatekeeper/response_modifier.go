@@ -8,6 +8,10 @@ type ResponseModifier interface {
 	Modify(*shared.Response) error
 }
 
+type ResponseModifierClient interface {
+	Modify(*shared.Response) error
+}
+
 type LocalResponseModifier struct{}
 
 func (m *LocalResponseModifier) Modify(res *shared.Response) error {
