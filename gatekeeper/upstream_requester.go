@@ -7,14 +7,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/plugin/upstream"
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type UpstreamRequester interface {
 	Start() error
-	Stop() error
+	Stop(time.Duration) error
 
-	UpstreamForRequest(*http.Request) (*Upstream, error)
+	UpstreamForRequest(*http.Request) (*shared.Upstream, error)
+}
+
+type UpstreamRequesterClient interface {
+	UpstreamForRequest(*http.Request) (*shared.Upstream, error)
 }
 
 type AsyncUpstreamRequester struct {
@@ -23,9 +27,9 @@ type AsyncUpstreamRequester struct {
 	listenCh    EventCh
 	stopCh      chan interface{}
 
-	knownUpstreams      map[upstream.UpstreamID]*Upstream
-	upstreamsByHostname map[string]*Upstream
-	upstreamsByPrefix   map[string]*Upstream
+	knownUpstreams      map[shared.UpstreamID]shared.Upstream
+	upstreamsByHostname map[string]*shared.Upstream
+	upstreamsByPrefix   map[string]*shared.Upstream
 	sync.RWMutex
 }
 
@@ -35,9 +39,9 @@ func NewAsyncUpstreamRequester(broadcaster EventBroadcaster) UpstreamRequester {
 		listenCh:    make(chan Event),
 		stopCh:      make(chan interface{}),
 
-		knownUpstreams:      make(map[upstream.UpstreamID]*Upstream),
-		upstreamsByHostname: make(map[string]*Upstream),
-		upstreamsByPrefix:   make(map[string]*Upstream),
+		knownUpstreams:      make(map[shared.UpstreamID]shared.Upstream),
+		upstreamsByHostname: make(map[string]*shared.Upstream),
+		upstreamsByPrefix:   make(map[string]*shared.Upstream),
 	}
 }
 
@@ -78,7 +82,7 @@ func (r *AsyncUpstreamRequester) listener() {
 }
 
 func (r *AsyncUpstreamRequester) addUpstream(event UpstreamEvent) {
-	if event.UpstreamID == upstream.NilUpstreamID {
+	if event.UpstreamID == shared.NilUpstreamID {
 		log.Fatal("Received an invalid upstream event...")
 		return
 	}
@@ -114,12 +118,12 @@ func (r *AsyncUpstreamRequester) removeUpstream(event UpstreamEvent) {
 	delete(r.knownUpstreams, event.UpstreamID)
 }
 
-func (r *AsyncUpstreamRequester) Stop() error {
+func (r *AsyncUpstreamRequester) Stop(duration time.Duration) error {
 	r.broadcaster.RemoveListener(r.listenID)
 	r.listenID = NilEventListenerID
 	r.stopCh <- struct{}{}
 
-	timeout := time.Now().Add(time.Second)
+	timeout := time.Now().Add(duration)
 	for {
 		select {
 		case <-r.stopCh:
@@ -137,7 +141,7 @@ finish:
 	return nil
 }
 
-func (r *AsyncUpstreamRequester) UpstreamForRequest(req *http.Request) (*Upstream, error) {
+func (r *AsyncUpstreamRequester) UpstreamForRequest(req *http.Request) (*shared.Upstream, error) {
 	r.Lock()
 	defer r.Unlock()
 	hostname := req.Host
@@ -156,12 +160,12 @@ func (r *AsyncUpstreamRequester) UpstreamForRequest(req *http.Request) (*Upstrea
 	// check all knownUpstreams, returning the first match
 	for _, upstream := range r.knownUpstreams {
 		if upstream.HasHostname(hostname) {
-			r.upstreamsByHostname[hostname] = upstream
-			return upstream, nil
+			r.upstreamsByHostname[hostname] = &upstream
+			return &upstream, nil
 		}
 		if upstream.HasPrefix(prefix) {
-			r.upstreamsByPrefix[prefix] = upstream
-			return upstream, nil
+			r.upstreamsByPrefix[prefix] = &upstream
+			return &upstream, nil
 		}
 	}
 

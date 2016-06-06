@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"fmt"
 	"net/rpc"
 	"os/exec"
 
@@ -13,21 +14,35 @@ var Handshake = plugin.HandshakeConfig{
 	MagicCookieValue: "upstream",
 }
 
-type Opts map[string]interface{}
-
-// this is the interface that public plugins have to call
+// this is the interface that public plugins need to implement.
 type Plugin interface {
-	// configures the plugin with options from the parent machine
-	Configure(Opts) error
+	// Pass along configuration options that are loosely defined from the
+	// parent plugin. Using anything in this dictionary needs to be done in
+	// as safe a way as possible!
+	Configure(map[string]interface{}) error
 
-	FetchUpstreams() ([]Upstream, error)
-	FetchUpstreamBackends(UpstreamID) ([]Backend, error)
+	// Return an error if the plugin is not acting properly and/or needs to
+	// be rebooted by the parent.
+	Heartbeat() error
 
-	// this method should start a background goroutine which will emit
-	// messages to the parent by calling methods on the manager type
+	// Start the plugin. Note the Manager interface is used to send
+	// Upstream and Backend events back into the parent process.
 	Start(Manager) error
+	Stop() error
+}
 
-	// this should wait a maximum of N seconds ...
+// this is the interface that clients of this plugin use
+type PluginClient interface {
+	// configures the plugin with options from the parent machine. Behind
+	// the scenes, the parent will pass in a manager implementation here
+	// which is then passed to the plugin implementer's start method. This
+	// is a little magical, but its controlled magic!
+	Configure(map[string]interface{}) error
+	Heartbeat() error
+
+	// NOTE this differs from the Plugin implementer side to make this a
+	// standard plugin and to work with the gatekeeper.PluginManager type.
+	Start() error
 	Stop() error
 }
 
@@ -39,7 +54,7 @@ type PluginDispenser struct {
 }
 
 func (d PluginDispenser) Server(b *plugin.MuxBroker) (interface{}, error) {
-	return &PluginRPCServer{broker: b, plugin: d.UpstreamPlugin}, nil
+	return &PluginRPCServer{broker: b, impl: d.UpstreamPlugin}, nil
 }
 
 func (d PluginDispenser) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
@@ -59,7 +74,7 @@ func RunPlugin(name string, upstreamPlugin Plugin) error {
 	return nil
 }
 
-func NewClient(name string, cmd string) (Plugin, error) {
+func NewClient(name string, cmd string) (PluginClient, error) {
 	pluginDispenser := PluginDispenser{}
 
 	client := plugin.NewClient(&plugin.ClientConfig{
@@ -82,5 +97,9 @@ func NewClient(name string, cmd string) (Plugin, error) {
 		return nil, err
 	}
 
-	return rawPlugin.(Plugin), nil
+	pluginClient, ok := rawPlugin.(PluginClient)
+	if !ok {
+		return nil, fmt.Errorf("Unable to cast dispensed plugin into a PluginClient")
+	}
+	return pluginClient, nil
 }

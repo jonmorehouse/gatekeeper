@@ -15,5 +15,4 @@ dev_run: dev
 
 # build all plugins in the plugins/ directory
 plugin_dev_build:
-	@GATEKEEPER_PLUGIN_DEV=1 sh -c "$(CURDIR)/scripts/build.sh"
-
+	@GATEKEEPER_PLUGIN_DEV=1 GATEKEEPER_DEV=1 sh -c "$(CURDIR)/scripts/build.sh"
