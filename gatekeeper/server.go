@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/shared"
@@ -90,10 +92,32 @@ func (s *ProxyServer) startHTTP() (func() error, error) {
 
 func (s *ProxyServer) httpHandler(rw http.ResponseWriter, req *http.Request) {
 	if s.stopAccepting {
-		io.WriteString(rw, "server is shutting down")
+		io.WriteString(rw, "SERVER_SHUTTING_DOWN")
+		return
 	}
 
-	io.WriteString(rw, "hello world")
+	upstream, err := s.upstreamRequester.UpstreamForRequest(req)
+	if err != nil {
+		io.WriteString(rw, "NO_UPSTREAM_FOUND")
+		return
+	}
+
+	backend, err := s.loadBalancer.GetBackend(upstream)
+	if err != nil {
+		io.WriteString(rw, "NO_BACKEND_FOUND")
+		return
+	}
+
+	backendURL, err := url.Parse(backend.Address)
+	if err != nil {
+		io.WriteString(rw, "INVALID_BACKEND_URL")
+		return
+	}
+
+	// proxy the request to the backend ...
+	log.Println("proxying request to ", backend.Address)
+	proxy := httputil.NewSingleHostReverseProxy(backendURL)
+	proxy.ServeHTTP(rw, req)
 }
 
 func (s *ProxyServer) startTCP() (func() error, error) {
