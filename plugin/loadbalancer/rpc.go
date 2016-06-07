@@ -9,24 +9,24 @@ import (
 
 type StartArgs struct{}
 type StartResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type StopArgs struct{}
 type StopResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type ConfigureArgs struct {
 	Opts map[string]interface{}
 }
 type ConfigureResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type HeartbeatArgs struct{}
 type HeartbeatResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type AddBackendArgs struct {
@@ -34,14 +34,14 @@ type AddBackendArgs struct {
 	Upstream shared.UpstreamID
 }
 type AddBackendResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type RemoveBackendArgs struct {
 	Backend shared.Backend
 }
 type RemoveBackendResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type GetBackendArgs struct {
@@ -49,7 +49,7 @@ type GetBackendArgs struct {
 }
 type GetBackendResp struct {
 	Backend shared.Backend
-	Err     error
+	Err     *shared.Error
 }
 
 type RPCServer struct {
@@ -99,68 +99,68 @@ type RPCClient struct {
 	client *rpc.Client
 }
 
-func (c *RPCClient) Start() error {
+func (c *RPCClient) Start() *shared.Error {
 	callArgs := StartArgs{}
 	callResp := StartResp{}
 	if err := c.client.Call("Plugin.Start", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *RPCClient) Stop() error {
+func (c *RPCClient) Stop() *shared.Error {
 	callArgs := StopArgs{}
 	callResp := StopResp{}
 	if err := c.client.Call("Plugin.Stop", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *RPCClient) Heartbeat() error {
+func (c *RPCClient) Heartbeat() *shared.Error {
 	callArgs := HeartbeatArgs{}
 	callResp := HeartbeatResp{}
 	if err := c.client.Call("Plugin.Heartbeat", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *RPCClient) Configure(opts map[string]interface{}) error {
+func (c *RPCClient) Configure(opts map[string]interface{}) *shared.Error {
 	callArgs := ConfigureArgs{
 		Opts: opts,
 	}
 	callResp := ConfigureResp{}
 	if err := c.client.Call("Plugin.Configure", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *RPCClient) AddBackend(upstream shared.UpstreamID, backend shared.Backend) error {
+func (c *RPCClient) AddBackend(upstream shared.UpstreamID, backend shared.Backend) *shared.Error {
 	callArgs := AddBackendArgs{
 		Upstream: upstream,
 		Backend:  backend,
 	}
 	callResp := AddBackendResp{}
 	if err := c.client.Call("Plugin.AddBackend", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *RPCClient) RemoveBackend(backend shared.Backend) error {
+func (c *RPCClient) RemoveBackend(backend shared.Backend) *shared.Error {
 	callArgs := RemoveBackendArgs{
 		Backend: backend,
 	}
 	callResp := RemoveBackendResp{}
 	if err := c.client.Call("Plugin.RemoveBackend", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *RPCClient) GetBackend(upstream shared.UpstreamID) (shared.Backend, error) {
+func (c *RPCClient) GetBackend(upstream shared.UpstreamID) (shared.Backend, *shared.Error) {
 	callArgs := GetBackendArgs{
 		Upstream: upstream,
 	}

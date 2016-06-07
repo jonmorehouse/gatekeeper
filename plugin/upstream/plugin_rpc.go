@@ -2,17 +2,17 @@ package upstream
 
 import (
 	"fmt"
-	"log"
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type ConfigureArgs struct {
 	Opts map[string]interface{}
 }
 type ConfigureResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type StartArgs struct {
@@ -20,12 +20,12 @@ type StartArgs struct {
 	ConnID uint32
 }
 type StartResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type StopArgs struct{}
 type StopResp struct {
-	Err error
+	Err *shared.Error
 }
 
 // this is what the plugin is actually running behind the scenes
@@ -37,7 +37,6 @@ type PluginRPCServer struct {
 }
 
 func (s *PluginRPCServer) Configure(args *ConfigureArgs, resp *ConfigureResp) error {
-	log.Println("RPC server configured")
 	if err := s.impl.Configure(args.Opts); err != nil {
 		resp.Err = err
 	}
@@ -47,11 +46,11 @@ func (s *PluginRPCServer) Configure(args *ConfigureArgs, resp *ConfigureResp) er
 func (s *PluginRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) error {
 	rpcManager, ok := s.manager.(*ManagerRPCClient)
 	if !ok {
-		return fmt.Errorf("Fatal: upstreams plugin's RPCServer has an RPCClient with no HeartBeat method")
+		return shared.NewError(fmt.Errorf("Fatal: upstreams plugin's RPCServer has an RPCClient with no HeartBeat method"))
 	}
 
 	if err := rpcManager.Heartbeat(); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 
 	return s.impl.Heartbeat()
@@ -59,12 +58,12 @@ func (s *PluginRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) er
 
 func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
 	if s.manager != nil {
-		return fmt.Errorf("Manager already started; must stop first")
+		return shared.NewError(fmt.Errorf("Manager already started; must stop first"))
 	}
 
 	conn, err := s.broker.Dial(args.ConnID)
 	if err != nil {
-		return err
+		return shared.NewError(err)
 	}
 
 	// create an RPC connection to the parent's upstream manager and pass it into the plugin userspace
@@ -89,7 +88,7 @@ func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
 
 func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
 	if s.manager == nil {
-		resp.Err = fmt.Errorf("No manager configured")
+		resp.Err = shared.NewError(fmt.Errorf("No manager configured"))
 		return nil
 	}
 
@@ -117,14 +116,14 @@ type PluginRPCClient struct {
 }
 
 // Configure the client and the server. Specifically, this requires that a Manager is passed in here
-func (c *PluginRPCClient) Configure(opts map[string]interface{}) error {
+func (c *PluginRPCClient) Configure(opts map[string]interface{}) *shared.Error {
 	rawManager, ok := opts["manager"]
 	if !ok {
-		return fmt.Errorf("No manager was passed into the rpc client")
+		return shared.NewError(fmt.Errorf("No manager was passed into the rpc client"))
 	}
 
 	if manager, ok := rawManager.(Manager); !ok {
-		return fmt.Errorf("Manager was passed in, but it was not successfully cast to a Manager type")
+		return shared.NewError(fmt.Errorf("Manager was passed in, but it was not successfully cast to a Manager type"))
 	} else {
 		c.manager = manager
 		delete(opts, "manager")
@@ -136,24 +135,24 @@ func (c *PluginRPCClient) Configure(opts map[string]interface{}) error {
 	callResp := ConfigureResp{}
 
 	if err := c.client.Call("Plugin.Configure", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 
 	return callResp.Err
 }
 
-func (c *PluginRPCClient) Heartbeat() error {
+func (c *PluginRPCClient) Heartbeat() *shared.Error {
 	callArgs := HeartbeatArgs{}
 	callResp := HeartbeatResp{}
 
 	if err := c.client.Call("Plugin.Heartbeat", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 
 	return callResp.Err
 }
 
-func (c *PluginRPCClient) Start() error {
+func (c *PluginRPCClient) Start() *shared.Error {
 	connID := c.broker.NextId()
 	callArgs := StartArgs{connID}
 	callResp := StartResp{}
@@ -170,7 +169,7 @@ func (c *PluginRPCClient) Start() error {
 	}()
 
 	if err := c.client.Call("Plugin.Start", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 
 	// before returning, we ensure that the plugin has verified
@@ -179,15 +178,14 @@ func (c *PluginRPCClient) Start() error {
 	// verify connectivity before returning here.
 	<-connectedCh
 	close(connectedCh)
-
 	return callResp.Err
 }
 
-func (c *PluginRPCClient) Stop() error {
+func (c *PluginRPCClient) Stop() *shared.Error {
 	callArgs := StopArgs{}
 	callResp := StopResp{}
 	if err := c.client.Call("Plugin.Stop", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 
 	c.client.Close()

@@ -61,21 +61,25 @@ func main() {
 		log.Fatal(err)
 	}
 
+	stopCh := make(chan interface{})
 	go func() {
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 		<-signals
+		log.Println("Caught a signal...")
 		// by default, we give 10 seconds for the app to shut down gracefully
 		if err := app.Stop(time.Second * 10); err != nil {
 			log.Fatal(err)
 		}
+		log.Println("Successfully shutdown application")
+		stopCh <- struct{}{}
 	}()
 
 	// Start and run the application. This blocks
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
-
-	time.Sleep(time.Second * 10)
+	// wait for the application to finish shutting down
+	<-stopCh
 }

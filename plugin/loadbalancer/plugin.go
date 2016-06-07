@@ -19,18 +19,18 @@ type Opts map[string]interface{}
 // this is the interface that gatekeeper sees
 type Plugin interface {
 	// standard plugin methods
-	Start() error
-	Stop() error
+	Start() *shared.Error
+	Stop() *shared.Error
 	// this isn't Opts, because we want to make this as general as possible
 	// for expressiveness between different plugins
-	Configure(map[string]interface{}) error
+	Configure(map[string]interface{}) *shared.Error
 	// Heartbeat is called by a plugin manager in the primary application periodically
-	Heartbeat() error
+	Heartbeat() *shared.Error
 
 	// loadbalancer specific methods
-	AddBackend(shared.UpstreamID, shared.Backend) error
-	RemoveBackend(shared.Backend) error
-	GetBackend(shared.UpstreamID) (shared.Backend, error)
+	AddBackend(shared.UpstreamID, shared.Backend) *shared.Error
+	RemoveBackend(shared.Backend) *shared.Error
+	GetBackend(shared.UpstreamID) (shared.Backend, *shared.Error)
 }
 
 type PluginDispenser struct {
@@ -62,7 +62,7 @@ func RunPlugin(name string, impl Plugin) error {
 	return nil
 }
 
-func NewClient(name string, cmd string) (Plugin, error) {
+func NewClient(name string, cmd string) (Plugin, func(), error) {
 	pluginDispenser := PluginDispenser{}
 
 	client := plugin.NewClient(&plugin.ClientConfig{
@@ -76,14 +76,14 @@ func NewClient(name string, cmd string) (Plugin, error) {
 	rpcClient, err := client.Client()
 	if err != nil {
 		client.Kill()
-		return nil, err
+		return nil, func() {}, err
 	}
 
 	rawPlugin, err := rpcClient.Dispense(name)
 	if err != nil {
 		client.Kill()
-		return nil, err
+		return nil, func() {}, err
 	}
 
-	return rawPlugin.(Plugin), nil
+	return rawPlugin.(Plugin), func() { client.Kill() }, nil
 }

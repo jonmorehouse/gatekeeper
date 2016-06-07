@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
@@ -13,11 +12,6 @@ import (
 type Publisher interface {
 	Start() error
 	Stop(time.Duration) error
-}
-
-type UpstreamPublisherAndManager interface {
-	Publisher
-	upstream_plugin.Manager
 }
 
 // UpstreamPublisher starts, maintains and wraps an UpstreamPlugin, accepting
@@ -34,12 +28,16 @@ type UpstreamPublisher struct {
 	// keep a tally of the upstreams / plugins we've seen here by ID only
 	knownUpstreams map[shared.UpstreamID]interface{}
 	knownBackends  map[shared.BackendID]interface{}
+
+	sync.RWMutex
 }
 
-func NewUpstreamPublisher(pluginManagers []PluginManager, broadcaster EventBroadcaster) UpstreamPublisherAndManager {
+func NewUpstreamPublisher(pluginManagers []PluginManager, broadcaster EventBroadcaster) *UpstreamPublisher {
 	return &UpstreamPublisher{
 		pluginManagers: pluginManagers,
 		broadcaster:    broadcaster,
+		knownUpstreams: make(map[shared.UpstreamID]interface{}),
+		knownBackends:  make(map[shared.BackendID]interface{}),
 	}
 }
 
@@ -100,20 +98,25 @@ func (p *UpstreamPublisher) Stop(dur time.Duration) error {
 }
 
 func (p *UpstreamPublisher) AddUpstream(upstream shared.Upstream) error {
+	p.Lock()
+	defer p.Unlock()
+	p.knownUpstreams[upstream.ID] = struct{}{}
 	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType:  UpstreamAdded,
 		Upstream:   upstream,
 		UpstreamID: upstream.ID,
 	})
 	if err != nil {
-		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
 	}
 	return nil
 }
 
 func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
+	p.Lock()
+	defer p.Unlock()
 	if _, ok := p.knownUpstreams[upstreamID]; !ok {
-		return shared.NewError(fmt.Errorf("UPSTREAM_NOT_FOUND"))
+		return fmt.Errorf("UPSTREAM_NOT_FOUND")
 	}
 
 	delete(p.knownUpstreams, upstreamID)
@@ -122,14 +125,16 @@ func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 		UpstreamID: upstreamID,
 	})
 	if err != nil {
-		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
 	}
 	return nil
 }
 
 func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) error {
+	p.Lock()
+	defer p.Unlock()
 	if _, ok := p.knownUpstreams[upstreamID]; !ok {
-		return shared.NewError(fmt.Errorf("UPSTREAM_NOT_FOUND"))
+		return fmt.Errorf("UPSTREAM_NOT_FOUND")
 	}
 
 	err := p.broadcaster.Publish(UpstreamEvent{
@@ -139,21 +144,45 @@ func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend sha
 		Backend:    backend,
 	})
 	if err != nil {
-		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
 	}
 	return nil
 }
 
 func (p *UpstreamPublisher) RemoveBackend(backendID shared.BackendID) error {
+	p.Lock()
+	defer p.Unlock()
 	if _, ok := p.knownBackends[backendID]; !ok {
-		return shared.NewError(fmt.Errorf("BACKEND_NOT_FOUND"))
+		return fmt.Errorf("BACKEND_NOT_FOUND")
 	}
 	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType: BackendRemoved,
 		BackendID: backendID,
 	})
 	if err != nil {
-		return shared.NewError(fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE"))
+		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
 	}
 	return nil
+}
+
+// this is a small type that implements the upstream_plugin.Manager interface
+// by wrapping an upstream publisher.
+type RPCUpstreamPublisher struct {
+	publisher *UpstreamPublisher
+}
+
+func (p *RPCUpstreamPublisher) AddUpstream(u shared.Upstream) *shared.Error {
+	return shared.NewError(p.publisher.AddUpstream(u))
+}
+
+func (p *RPCUpstreamPublisher) RemoveUpstream(uID shared.UpstreamID) *shared.Error {
+	return shared.NewError(p.publisher.RemoveUpstream(uID))
+}
+
+func (p *RPCUpstreamPublisher) AddBackend(uID shared.UpstreamID, backend shared.Backend) *shared.Error {
+	return shared.NewError(p.publisher.AddBackend(uID, backend))
+}
+
+func (p *RPCUpstreamPublisher) RemoveBackend(bID shared.BackendID) *shared.Error {
+	return shared.NewError(p.publisher.RemoveBackend(bID))
 }

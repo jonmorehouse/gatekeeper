@@ -1,9 +1,13 @@
 package gatekeeper
 
+import (
+	"github.com/jonmorehouse/gatekeeper/shared"
+)
+
 type Plugin interface {
-	Start() error
-	Stop() error
-	Configure(map[string]interface{}) error
+	Start() *shared.Error
+	Stop() *shared.Error
+	Configure(map[string]interface{}) *shared.Error
 }
 
 type PluginType uint

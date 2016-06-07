@@ -13,21 +13,23 @@ type StaticUpstreams struct {
 	stopCh  chan interface{}
 }
 
-func (s *StaticUpstreams) Configure(map[string]interface{}) error {
+func (s *StaticUpstreams) Configure(map[string]interface{}) *shared.Error {
 	return nil
 }
 
-func (s *StaticUpstreams) Heartbeat() error {
+func (s *StaticUpstreams) Heartbeat() *shared.Error {
 	return nil
 }
 
-func (s *StaticUpstreams) Start(manager plugin.Manager) error {
+func (s *StaticUpstreams) Start(manager plugin.Manager) *shared.Error {
+	log.Println("static-upstreams plugin started...")
 	s.manager = manager
 	go s.worker()
 	return nil
 }
 
-func (s *StaticUpstreams) Stop() error {
+func (s *StaticUpstreams) Stop() *shared.Error {
+	log.Println("static-upstreams plugin stopped...")
 	return nil
 }
 
@@ -47,9 +49,11 @@ func (s *StaticUpstreams) worker() {
 
 	err = s.manager.AddBackend(upstr.ID, backend)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Static upstreams plugin was unable to emit a backend")
+		log.Println(err)
 	}
 
+	// hang around until the process exits!
 	for {
 		select {
 		case <-s.stopCh:
