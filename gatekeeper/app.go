@@ -1,6 +1,7 @@
 package gatekeeper
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -13,10 +14,12 @@ type startStop interface {
 }
 
 type App struct {
-	servers []startStop
+	// the server type adheres to the startStop interface, by convenience.
+	servers []Server
 
 	broadcaster       EventBroadcaster
-	upstreamPublisher UpstreamPublisherAndManager
+	upstreamPublisher *UpstreamPublisher
+	upstreamRequester UpstreamRequester
 	loadBalancer      LoadBalancer
 }
 
@@ -47,11 +50,15 @@ func New(options Options) (*App, error) {
 	// RPCServer that is launched inside of each RPCClient uses to emit
 	// messages too
 	upstreamPublisher := NewUpstreamPublisher(upstreamPlugins, broadcaster)
+	// rpcUpstreamPublisher is an implementation of the upstreamPublisher
+	// that is operable via RPC. The primary difference being that it uses
+	// `shared.Error` instead of error interfaces
+	rpcUpstreamPublisher := &RPCUpstreamPublisher{upstreamPublisher}
 
 	// when the upstream plugins are configured, the publisher gets passed
 	// to them and used as the manager type. This allows the upstreamPlugin
 	// to talk back into this parent process.
-	options.UpstreamPluginOpts["manager"] = upstreamPublisher
+	options.UpstreamPluginOpts["manager"] = rpcUpstreamPublisher
 
 	// build an upstreamRequester for each server to communicate to the
 	// upstream store. This is used to find the correct upstream for each
@@ -80,6 +87,7 @@ func New(options Options) (*App, error) {
 	servers := make([]Server, 0, 4)
 	if options.HTTPPublicPort != 0 {
 		servers = append(servers, &ProxyServer{
+			stopCh:            make(chan interface{}),
 			port:              options.HTTPPublicPort,
 			protocol:          shared.HTTPPublic,
 			upstreamRequester: upstreamRequester,
@@ -89,17 +97,29 @@ func New(options Options) (*App, error) {
 		})
 	}
 
+	if len(servers) == 0 {
+		return nil, fmt.Errorf("at least one server must be specified")
+	}
+
 	return &App{
 		broadcaster:       broadcaster,
+		upstreamRequester: upstreamRequester,
 		upstreamPublisher: upstreamPublisher,
 		loadBalancer:      loadBalancer,
+		servers:           servers,
 	}, nil
 }
 
 func (a *App) Start() error {
+	// start the upstreamRequester and loadBalancer first because they
+	// receive notifications from the broadcaster immediately and we'd like
+	// to make sure that any plugin that emits upstreams/backends to the
+	// server at any time is supported. eg: if a plugin emits
+	// upstreams/backends at start time and never again.
 	syncStart := []startStop{
+		a.upstreamRequester,
+		a.loadBalancer,
 		a.upstreamPublisher,
-		//a.loadBalancer,
 	}
 	for _, job := range syncStart {
 		if err := job.Start(); err != nil {
@@ -107,14 +127,15 @@ func (a *App) Start() error {
 		}
 	}
 
-	errs := NewAsyncMultiError()
 	// start all servers asynchronously
+	errs := NewAsyncMultiError()
 	var wg sync.WaitGroup
 	for _, server := range a.servers {
 		wg.Add(1)
 		go func(s startStop) {
 			defer wg.Done()
 			if err := s.Start(); err != nil {
+				fmt.Println(err)
 				errs.Add(err)
 			}
 		}(server)
@@ -125,6 +146,42 @@ func (a *App) Start() error {
 }
 
 func (a *App) Stop(duration time.Duration) error {
+	errs := NewAsyncMultiError()
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	// stop accepting connections on each server first, and then start the
+	// shutdown process. Its expected that the shutdown process takes
+	// longer and as such, it is fired off in a goroutine at the same time
+	// that other services throughout the app are shutdown.
+	for _, server := range a.servers {
+		if err := server.StopAccepting(); err != nil {
+			errs.Add(err)
+		}
+		wg.Add(1)
+		go func(s startStop) {
+			defer wg.Done()
+			if err := s.Stop(duration); err != nil {
+				errs.Add(err)
+			}
+		}(server)
+	}
+
+	// shutdown all other plugins and internal subscribers
+	jobs := []startStop{
+		a.upstreamRequester,
+		a.loadBalancer,
+		a.upstreamPublisher,
+	}
+	for _, job := range jobs {
+		wg.Add(1)
+		go func(j startStop) {
+			defer wg.Done()
+			if err := j.Stop(duration); err != nil {
+				errs.Add(err)
+			}
+		}(job)
+	}
 
 	return nil
 }

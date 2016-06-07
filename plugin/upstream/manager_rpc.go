@@ -6,12 +6,15 @@ import (
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
+type NotifyArgs struct{}
+type NotifyResp struct{}
+
 type AddUpstreamArgs struct {
 	Upstream shared.Upstream
 }
 
 type AddUpstreamResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type RemoveUpstreamArgs struct {
@@ -19,7 +22,7 @@ type RemoveUpstreamArgs struct {
 }
 
 type RemoveUpstreamResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type AddBackendArgs struct {
@@ -28,7 +31,7 @@ type AddBackendArgs struct {
 }
 
 type AddBackendResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type RemoveBackendArgs struct {
@@ -36,58 +39,59 @@ type RemoveBackendArgs struct {
 }
 
 type RemoveBackendResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type HeartbeatArgs struct{}
 type HeartbeatResp struct {
-	Err error
+	Err *shared.Error
 }
 
 type ManagerRPCClient struct {
 	client *rpc.Client
 }
 
-func (c *ManagerRPCClient) Notify() error {
-	return nil
+func (c *ManagerRPCClient) Notify() *shared.Error {
+	err := c.client.Call("Plugin.Notify", &NotifyArgs{}, &NotifyResp{})
+	return shared.NewError(err)
 }
 
-func (c *ManagerRPCClient) Heartbeat() error {
+func (c *ManagerRPCClient) Heartbeat() *shared.Error {
 	callArgs := HeartbeatArgs{}
 	callResp := HeartbeatResp{}
 
 	if err := c.client.Call("Plugin.Heartbeat", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddUpstream(upstream shared.Upstream) error {
+func (c *ManagerRPCClient) AddUpstream(upstream shared.Upstream) *shared.Error {
 	callArgs := AddUpstreamArgs{
 		Upstream: upstream,
 	}
 	callResp := AddUpstreamResp{}
 
 	if err := c.client.Call("Plugin.AddUpstream", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) RemoveUpstream(upstreamID shared.UpstreamID) error {
+func (c *ManagerRPCClient) RemoveUpstream(upstreamID shared.UpstreamID) *shared.Error {
 	callArgs := RemoveUpstreamArgs{
 		UpstreamID: upstreamID,
 	}
 	callResp := RemoveUpstreamResp{}
 
 	if err := c.client.Call("Plugin.RemoveUpstream", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) error {
+func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) *shared.Error {
 	callArgs := AddBackendArgs{
 		UpstreamID: upstreamID,
 		Backend:    backend,
@@ -95,19 +99,19 @@ func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shar
 	callResp := AddBackendResp{}
 
 	if err := c.client.Call("Plugin.AddBackend", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) RemoveBackend(backendID shared.BackendID) error {
+func (c *ManagerRPCClient) RemoveBackend(backendID shared.BackendID) *shared.Error {
 	callArgs := RemoveBackendArgs{
 		BackendID: backendID,
 	}
 	callResp := RemoveBackendResp{}
 
 	if err := c.client.Call("Plugin.RemoveBackend", &callArgs, &callResp); err != nil {
-		return err
+		return shared.NewError(err)
 	}
 	return callResp.Err
 }
@@ -117,7 +121,7 @@ type ManagerRPCServer struct {
 	connectedCh chan interface{}
 }
 
-func (s *ManagerRPCServer) Notify(*interface{}, *interface{}) error {
+func (s *ManagerRPCServer) Notify(*NotifyArgs, *NotifyResp) error {
 	s.connectedCh <- new(interface{})
 	return nil
 }

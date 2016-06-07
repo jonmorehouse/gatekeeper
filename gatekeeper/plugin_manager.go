@@ -50,7 +50,6 @@ func (p *pluginManager) Start() error {
 	// starts and configures the plugins so that they work correctly
 	errs := NewAsyncMultiError()
 	var wg sync.WaitGroup
-	defer wg.Wait()
 
 	for i := uint(0); i < p.count; i++ {
 		wg.Add(1)
@@ -63,18 +62,19 @@ func (p *pluginManager) Start() error {
 		p.instances = append(p.instances, instance)
 
 		go func(plugin Plugin) {
+			defer wg.Done()
 			if err := plugin.Configure(p.opts); err != nil {
 				errs.Add(err)
 				return
 			}
 
-			defer wg.Done()
 			if err := plugin.Start(); err != nil {
 				errs.Add(err)
 			}
 		}(instance)
 	}
 
+	wg.Wait()
 	return errs.ToErr()
 }
 

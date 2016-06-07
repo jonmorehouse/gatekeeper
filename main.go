@@ -70,12 +70,11 @@ func main() {
 		if err := app.Stop(time.Second * 10); err != nil {
 			log.Fatal(err)
 		}
+		log.Println("Successfully shutdown application")
 	}()
 
 	// Start and run the application. This blocks
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
-
-	time.Sleep(time.Second * 10)
 }
