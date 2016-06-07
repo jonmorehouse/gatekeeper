@@ -62,7 +62,7 @@ func RunPlugin(name string, impl Plugin) error {
 	return nil
 }
 
-func NewClient(name string, cmd string) (Plugin, error) {
+func NewClient(name string, cmd string) (Plugin, func(), error) {
 	pluginDispenser := PluginDispenser{}
 
 	client := plugin.NewClient(&plugin.ClientConfig{
@@ -76,14 +76,14 @@ func NewClient(name string, cmd string) (Plugin, error) {
 	rpcClient, err := client.Client()
 	if err != nil {
 		client.Kill()
-		return nil, err
+		return nil, func() {}, err
 	}
 
 	rawPlugin, err := rpcClient.Dispense(name)
 	if err != nil {
 		client.Kill()
-		return nil, err
+		return nil, func() {}, err
 	}
 
-	return rawPlugin.(Plugin), nil
+	return rawPlugin.(Plugin), func() { client.Kill() }, nil
 }

@@ -33,6 +33,7 @@ type pluginManager struct {
 	// count is the number of instances that this manager should manage for this plugin
 	count     uint
 	instances []Plugin
+	killers   []func()
 }
 
 func NewPluginManager(pluginCmd string, opts map[string]interface{}, count uint, pluginType PluginType) PluginManager {
@@ -43,6 +44,7 @@ func NewPluginManager(pluginCmd string, opts map[string]interface{}, count uint,
 		opts:       opts,
 		count:      count,
 		instances:  make([]Plugin, 0, count),
+		killers:    make([]func(), 0, count),
 	}
 }
 
@@ -53,13 +55,15 @@ func (p *pluginManager) Start() error {
 
 	for i := uint(0); i < p.count; i++ {
 		wg.Add(1)
-		instance, err := p.buildPlugin()
+		instance, killer, err := p.buildPlugin()
 		if err != nil {
 			errs.Add(err)
+			killer()
 			wg.Done()
 			continue
 		}
 		p.instances = append(p.instances, instance)
+		p.killers = append(p.killers, killer)
 
 		go func(plugin Plugin) {
 			defer wg.Done()
@@ -78,7 +82,7 @@ func (p *pluginManager) Start() error {
 	return errs.ToErr()
 }
 
-func (m pluginManager) buildPlugin() (Plugin, error) {
+func (m pluginManager) buildPlugin() (Plugin, func(), error) {
 	if m.pluginType == UpstreamPlugin {
 		return upstream_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
@@ -86,7 +90,7 @@ func (m pluginManager) buildPlugin() (Plugin, error) {
 		return loadbalancer_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
 
-	return nil, fmt.Errorf("INVALID_PLUGIN_TYPE")
+	return nil, nil, fmt.Errorf("INVALID_PLUGIN_TYPE")
 }
 
 func (p *pluginManager) Stop(duration time.Duration) error {
@@ -101,24 +105,39 @@ func (p *pluginManager) Stop(duration time.Duration) error {
 			if err := p.Stop(); err != nil {
 				errs.Add(err)
 			}
+
+			// stop the plugin client
+
 			wg.Done()
 		}(instance)
 	}
 
 	// wait for the plugins to all finish, or otherwise timeout
 	doneCh := make(chan interface{})
+	go func() {
+		wg.Wait()
+		doneCh <- struct{}{}
+	}()
+
+	// wait for the waitGroup to finish and signal or exit with a timeout
 	for {
 		select {
 		case <-doneCh:
-			return errs.ToErr()
+			goto cleanup
 		default:
 			if time.Now().After(timeout) {
 				errs.Add(fmt.Errorf("Timed out waiting for plugins to stop..."))
-				return errs.ToErr()
+				goto cleanup
 			}
 		}
 	}
 
+cleanup:
+	// call all kill functions for all plugin clients, ensuring that we
+	// shut down any loose rpc connections
+	for _, killer := range p.killers {
+		killer()
+	}
 	return errs.ToErr()
 }
 

@@ -75,7 +75,7 @@ func RunPlugin(name string, upstreamPlugin Plugin) error {
 	return nil
 }
 
-func NewClient(name string, cmd string) (PluginClient, error) {
+func NewClient(name string, cmd string) (PluginClient, func(), error) {
 	pluginDispenser := PluginDispenser{}
 
 	client := plugin.NewClient(&plugin.ClientConfig{
@@ -89,18 +89,19 @@ func NewClient(name string, cmd string) (PluginClient, error) {
 	rpcClient, err := client.Client()
 	if err != nil {
 		client.Kill()
-		return nil, err
+		return nil, func() {}, err
 	}
 
 	rawPlugin, err := rpcClient.Dispense(name)
 	if err != nil {
 		client.Kill()
-		return nil, err
+		return nil, func() {}, err
 	}
 
 	pluginClient, ok := rawPlugin.(PluginClient)
 	if !ok {
-		return nil, fmt.Errorf("Unable to cast dispensed plugin into a PluginClient")
+		return nil, func() {}, fmt.Errorf("Unable to cast dispensed plugin into a PluginClient")
 	}
-	return pluginClient, nil
+
+	return pluginClient, func() { client.Kill() }, nil
 }

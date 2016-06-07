@@ -87,7 +87,6 @@ func New(options Options) (*App, error) {
 	servers := make([]Server, 0, 4)
 	if options.HTTPPublicPort != 0 {
 		servers = append(servers, &ProxyServer{
-			stopCh:            make(chan interface{}),
 			port:              options.HTTPPublicPort,
 			protocol:          shared.HTTPPublic,
 			upstreamRequester: upstreamRequester,
@@ -128,14 +127,13 @@ func (a *App) Start() error {
 	}
 
 	// start all servers asynchronously
-	errs := NewAsyncMultiError()
 	var wg sync.WaitGroup
+	errs := NewAsyncMultiError()
 	for _, server := range a.servers {
 		wg.Add(1)
 		go func(s startStop) {
 			defer wg.Done()
 			if err := s.Start(); err != nil {
-				fmt.Println(err)
 				errs.Add(err)
 			}
 		}(server)
@@ -148,7 +146,6 @@ func (a *App) Start() error {
 func (a *App) Stop(duration time.Duration) error {
 	errs := NewAsyncMultiError()
 	var wg sync.WaitGroup
-	defer wg.Wait()
 
 	// stop accepting connections on each server first, and then start the
 	// shutdown process. Its expected that the shutdown process takes
@@ -157,6 +154,7 @@ func (a *App) Stop(duration time.Duration) error {
 	for _, server := range a.servers {
 		if err := server.StopAccepting(); err != nil {
 			errs.Add(err)
+			continue
 		}
 		wg.Add(1)
 		go func(s startStop) {
@@ -183,5 +181,6 @@ func (a *App) Stop(duration time.Duration) error {
 		}(job)
 	}
 
-	return nil
+	wg.Wait()
+	return errs.ToErr()
 }

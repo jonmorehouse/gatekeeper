@@ -2,10 +2,13 @@ package gatekeeper
 
 import (
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/tylerb/graceful"
 )
 
 type Server interface {
@@ -21,28 +24,81 @@ type ProxyServer struct {
 	loadBalancer      LoadBalancerClient
 	requestModifier   RequestModifierClient
 	responseModifier  ResponseModifierClient
-	stopCh            chan interface{}
+
+	stopAccepting bool
+	stopFn        func(time.Duration) error
+
+	httpServer *graceful.Server
 }
 
 func (s *ProxyServer) Start() error {
-	log.Println("server started...")
-	for {
-		select {
-		case <-s.stopCh:
-			return nil
-		default:
-			time.Sleep(time.Second)
-		}
+	var starter func() error
+	var err error
+
+	if s.protocol == shared.HTTPPublic || s.protocol == shared.HTTPPrivate {
+		starter, err = s.startHTTP()
+	} else if s.protocol == shared.TCPPublic || s.protocol == shared.TCPPrivate {
+		starter, err = s.startTCP()
+	} else {
+		return fmt.Errorf("Invalid protocol")
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return starter()
+}
+
+func (s *ProxyServer) StopAccepting() error {
+	s.stopAccepting = true
+	return nil
+}
+
+func (s *ProxyServer) Stop(duration time.Duration) error {
+	if err := s.stopFn(time.Second); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (s *ProxyServer) StopAccepting() error {
-	return nil
+func (s *ProxyServer) startHTTP() (func() error, error) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.httpHandler)
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", s.port),
+		Handler: mux,
+	}
+
+	s.httpServer = &graceful.Server{
+		Server:           server,
+		NoSignalHandling: true,
+	}
+
+	s.stopFn = func(dur time.Duration) error {
+		log.Println("shutting down http server")
+		s.httpServer.Stop(dur)
+		return nil
+	}
+
+	return func() error {
+		log.Println("starting http server and listening on port ", s.port)
+		return s.httpServer.ListenAndServe()
+	}, nil
 }
 
-func (s *ProxyServer) Stop(time.Duration) error {
-	fmt.Println("proxy server stopped...")
-	s.stopCh <- struct{}{}
-	return nil
+func (s *ProxyServer) httpHandler(rw http.ResponseWriter, req *http.Request) {
+	if s.stopAccepting {
+		io.WriteString(rw, "server is shutting down")
+	}
+
+	io.WriteString(rw, "hello world")
+}
+
+func (s *ProxyServer) startTCP() (func() error, error) {
+	s.stopFn = func(time.Duration) error { return nil }
+	return func() error {
+		return nil
+	}, nil
 }

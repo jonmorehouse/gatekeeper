@@ -98,7 +98,7 @@ func (l *loadBalancer) Stop(duration time.Duration) error {
 	for {
 		select {
 		case <-doneCh:
-			break
+			goto done
 		default:
 			if time.Now().After(timeout) {
 				errs.Add(fmt.Errorf("Did not stop quickly enough"))
