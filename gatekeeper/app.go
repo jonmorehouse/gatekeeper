@@ -21,6 +21,7 @@ type App struct {
 	upstreamPublisher *UpstreamPublisher
 	upstreamRequester UpstreamRequester
 	requestModifier   RequestModifier
+	responseModifier  ResponseModifier
 	loadBalancer      LoadBalancer
 }
 
@@ -85,15 +86,20 @@ func New(options Options) (*App, error) {
 	// the RequestModifier plugins specified
 	requestModifier := NewRequestModifier(requestPlugins)
 
-	// ResponseModifier types are used to allow Responses to be modified
-	// over RPC, allowing for users to handle responses as they'd like.
-	// NOTE: this currently doesn't respect the ResponseModifier options
-	// because no such plugins currently exist.
-	responseModifier := &LocalResponseModifier{}
+	// build out PluginManagers for each of the ResponsePlugins specified.
+	responsePlugins := make([]PluginManager, 0, len(options.ResponsePlugins))
+	for _, pluginCmd := range options.ResponsePlugins {
+		plugin := NewPluginManager(pluginCmd, options.ResponsePluginOpts, options.ResponsePluginsCount, ResponsePlugin)
+		responsePlugins = append(responsePlugins, plugin)
+	}
+
+	// the responseModifier is responsible for modifying responses by
+	// calling the ResponseModifier plugins upon callback during a request.
+	responseModifier := NewResponseModifier(responsePlugins)
 
 	// Proxier is the naive type which _actually_ handles proxying of
 	// requests out to the backend address
-	proxier := NewProxier()
+	proxier := NewProxier(responseModifier)
 
 	// build out each server type
 	servers := make([]Server, 0, 4)
@@ -119,6 +125,7 @@ func New(options Options) (*App, error) {
 		upstreamPublisher: upstreamPublisher,
 		loadBalancer:      loadBalancer,
 		requestModifier:   requestModifier,
+		responseModifier:  responseModifier,
 		servers:           servers,
 	}, nil
 }
@@ -134,6 +141,7 @@ func (a *App) Start() error {
 		a.loadBalancer,
 		a.upstreamPublisher,
 		a.requestModifier,
+		a.responseModifier,
 	}
 	for _, job := range syncStart {
 		if err := job.Start(); err != nil {
@@ -186,6 +194,7 @@ func (a *App) Stop(duration time.Duration) error {
 		a.loadBalancer,
 		a.upstreamPublisher,
 		a.requestModifier,
+		a.responseModifier,
 	}
 	for _, job := range jobs {
 		wg.Add(1)

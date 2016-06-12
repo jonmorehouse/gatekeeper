@@ -17,8 +17,8 @@ const (
 	UpstreamPlugin PluginType = iota + 1
 	LoadBalancerPlugin
 	RequestPlugin
-
-	// NOTE not implemented
 	ResponsePlugin
+
+	// ResponsePlugin
 	ProxyPlugin
 )
