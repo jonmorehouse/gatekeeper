@@ -3,9 +3,8 @@ package gatekeeper
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/shared"
@@ -29,6 +28,7 @@ type ProxyServer struct {
 	stopAccepting bool
 
 	httpServer *graceful.Server
+	proxier    Proxier
 	errCh      chan error
 }
 
@@ -65,6 +65,7 @@ func (s *ProxyServer) startHTTP() error {
 
 	// start the server in a goroutine, passing any errors back to the errCh
 	go func() {
+		log.Println("listening on port: ", s.port)
 		err := s.httpServer.ListenAndServe()
 		errCh <- err
 	}()
@@ -88,17 +89,23 @@ finished:
 	return nil
 }
 
-func (s *ProxyServer) httpHandler(rw http.ResponseWriter, req *http.Request) {
+func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	if s.stopAccepting {
 		io.WriteString(rw, "SERVER_SHUTTING_DOWN")
 		return
 	}
 
-	upstream, err := s.upstreamRequester.UpstreamForRequest(req)
+	// build a *shared.Request for this rawReq; a wrapper with additional
+	// meta information around an *http.Request object
+	req := shared.NewRequest(rawReq, s.protocol)
+	upstream, matchType, err := s.upstreamRequester.UpstreamForRequest(req)
 	if err != nil {
 		io.WriteString(rw, "NO_UPSTREAM_FOUND")
 		return
 	}
+
+	req.Upstream = upstream
+	req.UpstreamMatchType = matchType
 
 	backend, err := s.loadBalancer.GetBackend(upstream)
 	if err != nil {
@@ -106,13 +113,21 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	backendURL, err := url.Parse(backend.Address)
+	req, err = s.requestModifier.ModifyRequest(req)
 	if err != nil {
-		io.WriteString(rw, "INVALID_BACKEND_URL")
+		log.Println(err)
+		io.WriteString(rw, "FAILURE_TO_MODIFY_REQUEST")
+		return
+	}
+	if req.Err != nil {
+		io.WriteString(rw, "request modifier failed")
 		return
 	}
 
-	PrepareBackendRequest(req, upstream, backend)
-	proxy := httputil.NewSingleHostReverseProxy(backendURL)
-	proxy.ServeHTTP(rw, req)
+	// pass the request along to the proxier to perform the request
+	// lifecycle on to the backend.
+	if err := s.proxier.Proxy(rw, rawReq, req, &backend); err != nil {
+		io.WriteString(rw, "UNABLE_TO_PROXY")
+		return
+	}
 }

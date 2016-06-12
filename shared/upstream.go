@@ -15,6 +15,14 @@ func NewUpstreamID() UpstreamID {
 	return UpstreamID(uuid)
 }
 
+type UpstreamMatchType uint
+
+const (
+	NilMatch UpstreamMatchType = iota + 1
+	PrefixMatch
+	HostnameMatch
+)
+
 type Upstream struct {
 	ID        UpstreamID
 	Name      string

@@ -47,8 +47,7 @@ func (s *StaticUpstreams) worker() {
 
 	backend := shared.Backend{
 		ID:      shared.NewBackendID(),
-		Address: "http://localhost:8002",
-		//Address: "https://httpbin.org",
+		Address: "https://httpbin.org",
 	}
 
 	err = s.manager.AddBackend(upstr.ID, backend)
