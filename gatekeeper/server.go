@@ -3,7 +3,6 @@ package gatekeeper
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -28,28 +27,13 @@ type ProxyServer struct {
 	responseModifier  ResponseModifierClient
 
 	stopAccepting bool
-	stopFn        func(time.Duration) error
 
 	httpServer *graceful.Server
+	errCh      chan error
 }
 
 func (s *ProxyServer) Start() error {
-	var starter func() error
-	var err error
-
-	if s.protocol == shared.HTTPPublic || s.protocol == shared.HTTPPrivate {
-		starter, err = s.startHTTP()
-	} else if s.protocol == shared.TCPPublic || s.protocol == shared.TCPPrivate {
-		starter, err = s.startTCP()
-	} else {
-		return fmt.Errorf("Invalid protocol")
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return starter()
+	return s.startHTTP()
 }
 
 func (s *ProxyServer) StopAccepting() error {
@@ -58,13 +42,11 @@ func (s *ProxyServer) StopAccepting() error {
 }
 
 func (s *ProxyServer) Stop(duration time.Duration) error {
-	if err := s.stopFn(time.Second); err != nil {
-		return err
-	}
-	return nil
+	s.httpServer.Stop(duration)
+	return <-s.errCh
 }
 
-func (s *ProxyServer) startHTTP() (func() error, error) {
+func (s *ProxyServer) startHTTP() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.httpHandler)
 
@@ -78,16 +60,32 @@ func (s *ProxyServer) startHTTP() (func() error, error) {
 		NoSignalHandling: true,
 	}
 
-	s.stopFn = func(dur time.Duration) error {
-		log.Println("shutting down http server")
-		s.httpServer.Stop(dur)
-		return nil
+	// the errCh is responsible for emitting an error when the server fails or closes.
+	errCh := make(chan error, 1)
+
+	// start the server in a goroutine, passing any errors back to the errCh
+	go func() {
+		err := s.httpServer.ListenAndServe()
+		errCh <- err
+	}()
+
+	// now we wait a maximum of 100milliseconds, which is arbitrary to
+	// catch any immediate errors from the listener
+	timeout := time.Now().Add(time.Millisecond * 100)
+	for {
+		select {
+		case err := <-errCh:
+			return err
+		default:
+			if time.Now().After(timeout) {
+				goto finished
+			}
+		}
 	}
 
-	return func() error {
-		log.Println("starting http server and listening on port ", s.port)
-		return s.httpServer.ListenAndServe()
-	}, nil
+finished:
+	s.errCh = errCh
+	return nil
 }
 
 func (s *ProxyServer) httpHandler(rw http.ResponseWriter, req *http.Request) {
@@ -114,15 +112,7 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// proxy the request to the backend ...
-	log.Println("proxying request to ", backend.Address)
+	PrepareBackendRequest(req, upstream, backend)
 	proxy := httputil.NewSingleHostReverseProxy(backendURL)
 	proxy.ServeHTTP(rw, req)
-}
-
-func (s *ProxyServer) startTCP() (func() error, error) {
-	s.stopFn = func(time.Duration) error { return nil }
-	return func() error {
-		return nil
-	}, nil
 }
