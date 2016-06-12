@@ -41,11 +41,13 @@ func main() {
 	flag.UintVar(&options.ResponsePluginsCount, "response-plugins-count", 1, "number of instances of each response plugin to operate")
 	responsePluginOpts := flag.String("response-plugins-opts", "{}", "json encoded options to be passed to each response plugin")
 
-	// TODO LogPlugin options
+	// TODO EventPlugin options
 
 	// Configure Listen Ports for different protocols
 	flag.UintVar(&options.HTTPPublicPort, "http-public-port", 8000, "listen port for http-public traffic. default: 8000")
 	flag.UintVar(&options.HTTPInternalPort, "http-internal-port", 8001, "listen port for http-internal traffic. default: 8001")
+
+	defaultTimeoutSeconds := flag.Uint("default-timeout", 10, "default-timeout in seconds. default: 10s")
 
 	flag.Parse()
 
@@ -77,6 +79,8 @@ func main() {
 	if err != nil {
 		log.Fatal("Invalid JSON for response-plugin-opts")
 	}
+
+	options.DefaultTimeout = time.Second * time.Duration(*defaultTimeoutSeconds)
 
 	// build the server application which manages multiple servers
 	// listening on multiple ports.

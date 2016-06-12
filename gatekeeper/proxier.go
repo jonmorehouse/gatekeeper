@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
@@ -18,14 +18,17 @@ type Proxier interface {
 }
 
 type proxier struct {
+	defaultTimeout time.Duration
+
 	responseModifier ResponseModifier
 	sync.RWMutex
 
 	requests map[*http.Request]*shared.Request
 }
 
-func NewProxier(responseModifier ResponseModifier) Proxier {
+func NewProxier(responseModifier ResponseModifier, defaultTimeout time.Duration) Proxier {
 	return &proxier{
+		defaultTimeout:   defaultTimeout,
 		responseModifier: responseModifier,
 		requests:         make(map[*http.Request]*shared.Request),
 	}
@@ -60,6 +63,8 @@ func (p *proxier) Proxy(rw http.ResponseWriter, rawReq *http.Request, req *share
 		p.requests[proxyReq] = req
 	}
 
+	// NOTE we respect request timeouts by fetching the upstream timeout and specifying a timeout
+
 	// the proxier type, this local struct acts as the actual Proxier,
 	// simply relying upon the default round trip var to make the requests
 	proxy.Transport = p
@@ -84,16 +89,57 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("INTERNAL_ERROR_REQUEST_CACHE_PROBLEM")
 	}
 
-	// perform the request using the default RoundTrip mechanism, creating
-	// an RPC compatbile response with the rawResponse once finished
-	rawResp, err := http.DefaultTransport.RoundTrip(rawReq)
+	var wg sync.WaitGroup
+	var err error
+	var rawResp *http.Response
+
+	// proxy the request, respecting the specified _total_ timeout. For
+	// now, this timeout doesn't differentiate between dial and response
+	// lifecycle timeouts and is a "total" timeout.
+	wg.Add(1)
+	go func() {
+		// perform the request using the default RoundTrip mechanism, creating
+		// an RPC compatbile response with the rawResponse once finished
+		rawResp, err = http.DefaultTransport.RoundTrip(rawReq)
+		wg.Done()
+	}()
+
+	// in a goroutine, wait for the request to finish.
+	doneCh := make(chan interface{})
+	go func() {
+		wg.Wait()
+		doneCh <- struct{}{}
+	}()
+
+	// if there is actually a timeout set, then we respect it, otherwise
+	// wait for the request to finish indefinitely. This of course, is
+	// configurable.
+	timeout := request.Upstream.Timeout
+	if timeout == time.Duration(0) {
+		timeout = p.defaultTimeout
+	}
+
+	if timeout > time.Duration(0) {
+		func() {
+			for {
+				select {
+				case <-doneCh:
+					return
+				case <-time.After(timeout):
+					err = fmt.Errorf("TIMEOUT")
+					return
+				}
+			}
+		}()
+	} else {
+		wg.Wait()
+	}
+
 	if err != nil {
-		log.Println(err)
 		return rawResp, err
 	}
 
 	resp := shared.NewResponse(rawResp)
-
 	// modify the response using our responseModifier and then map the
 	// response back to an _actual_ http.Response to be sent back to the
 	// client.
@@ -119,6 +165,5 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 	if resp.OverrideBody != nil {
 		rawResp.Body = ioutil.NopCloser(bytes.NewReader(resp.OverrideBody))
 	}
-
 	return rawResp, err
 }

@@ -1,5 +1,7 @@
 package shared
 
+import "time"
+
 type UpstreamID string
 
 var NilUpstreamID UpstreamID = ""
@@ -29,7 +31,7 @@ type Upstream struct {
 	Protocols []Protocol
 	Hostnames []string
 	Prefixes  []string
-	Opts      map[string]interface{}
+	Timeout   time.Duration
 }
 
 func (u Upstream) HasHostname(name string) bool {

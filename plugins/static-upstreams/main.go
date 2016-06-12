@@ -37,8 +37,10 @@ func (s *StaticUpstreams) worker() {
 	upstr := shared.Upstream{
 		ID:        shared.NewUpstreamID(),
 		Name:      "httpbin",
+		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
 		Prefixes:  []string{"httpbin"},
 		Hostnames: []string{"httpbin.org", "httpbin"},
+		Timeout:   time.Second * 5,
 	}
 	err := s.manager.AddUpstream(upstr)
 	if err != nil {

@@ -3,6 +3,7 @@ package gatekeeper
 import (
 	"fmt"
 	"os/exec"
+	"time"
 )
 
 type Options struct {
@@ -43,6 +44,9 @@ type Options struct {
 	// error out.
 	HTTPPublicPort   uint
 	HTTPInternalPort uint
+
+	// Default timeout for upstream requests
+	DefaultTimeout time.Duration
 }
 
 func ValidatePlugins(paths []string) ([]string, error) {

@@ -98,8 +98,8 @@ func New(options Options) (*App, error) {
 	responseModifier := NewResponseModifier(responsePlugins)
 
 	// Proxier is the naive type which _actually_ handles proxying of
-	// requests out to the backend address
-	proxier := NewProxier(responseModifier)
+	// requests out to the backend address.
+	proxier := NewProxier(responseModifier, options.DefaultTimeout)
 
 	// build out each server type
 	servers := make([]Server, 0, 4)
