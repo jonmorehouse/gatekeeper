@@ -9,6 +9,7 @@ import (
 
 	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
 	request_plugin "github.com/jonmorehouse/gatekeeper/plugin/request"
+	response_plugin "github.com/jonmorehouse/gatekeeper/plugin/response"
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
@@ -59,7 +60,14 @@ func (p *pluginManager) Start() error {
 		instance, killer, err := p.buildPlugin()
 		if err != nil {
 			errs.Add(err)
-			killer()
+
+			// most of the time, when an error occurs, it is
+			// because we specified an invalid plugin of this type.
+			// However, if there is a problem starting a plugin,
+			// then we need kill off the plugin before exiting.
+			if instance != nil {
+				killer()
+			}
 			wg.Done()
 			continue
 		}
@@ -92,6 +100,9 @@ func (m pluginManager) buildPlugin() (Plugin, func(), error) {
 	}
 	if m.pluginType == RequestPlugin {
 		return request_plugin.NewClient(m.pluginName, m.pluginCmd)
+	}
+	if m.pluginType == ResponsePlugin {
+		return response_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
 
 	return nil, nil, fmt.Errorf("INVALID_PLUGIN_TYPE")

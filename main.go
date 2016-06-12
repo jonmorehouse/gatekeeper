@@ -36,7 +36,11 @@ func main() {
 	flag.UintVar(&options.RequestPluginsCount, "request-plugins-count", 1, "number of instances of each request plugin to operate")
 	requestPluginOpts := flag.String("request-plugins-opts", "{}", "json encoded options to be passed to each request plugin")
 
-	// TODO ResponseModifierPlugins
+	// ResponsePlugin configuration
+	responsePlugins := flag.String("response-plugins", "response-modifier", "comma delimited list of response plugin executables")
+	flag.UintVar(&options.ResponsePluginsCount, "response-plugins-count", 1, "number of instances of each response plugin to operate")
+	responsePluginOpts := flag.String("response-plugins-opts", "{}", "json encoded options to be passed to each response plugin")
+
 	// TODO LogPlugin options
 
 	// Configure Listen Ports for different protocols
@@ -66,6 +70,12 @@ func main() {
 	options.RequestPluginOpts, err = parseJSONOpts(*requestPluginOpts)
 	if err != nil {
 		log.Fatal("Invalid JSON for request-plugin-opts")
+	}
+
+	options.ResponsePlugins = strings.Split(*responsePlugins, ",")
+	options.ResponsePluginOpts, err = parseJSONOpts(*responsePluginOpts)
+	if err != nil {
+		log.Fatal("Invalid JSON for response-plugin-opts")
 	}
 
 	// build the server application which manages multiple servers

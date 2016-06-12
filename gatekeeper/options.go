@@ -31,12 +31,12 @@ type Options struct {
 	RequestPluginOpts map[string]interface{}
 
 	// name of the plugin binary, expects a full path or the name of a
-	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	ResponseModifierPlugins []string
+	// binary in PATH eg: `response-modifier` or `/home/foo/bin/response-modifier`
+	ResponsePlugins []string
 	// number of instances to run
-	ResponseModifierPluginsCount uint
+	ResponsePluginsCount uint
 	// Opts to be passed along to plugin. Not currently used
-	ResponseModifierPluginOpts map[string]interface{}
+	ResponsePluginOpts map[string]interface{}
 
 	// Ports to start servers listening on. If not provided, the server
 	// will not be started. If collisions are detected, then this will
@@ -92,6 +92,8 @@ func (o *Options) Validate() error {
 	if o.RequestPluginsCount == 0 {
 		return fmt.Errorf("REQUEST_PLUGIN_COUNT_ZERO")
 	}
+
+	// verify that Response plugins are configured properly
 
 	return errs.ToErr()
 }
