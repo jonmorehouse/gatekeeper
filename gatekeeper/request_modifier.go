@@ -52,7 +52,6 @@ func (r *requestModifier) Start() error {
 
 func (r *requestModifier) Stop(duration time.Duration) error {
 	errs := NewAsyncMultiError()
-	timeout := time.Now().Add(duration)
 
 	var wg sync.WaitGroup
 	doneCh := make(chan interface{})
@@ -78,11 +77,9 @@ func (r *requestModifier) Stop(duration time.Duration) error {
 		select {
 		case <-doneCh:
 			return errs.ToErr()
-		default:
-			if time.Now().After(timeout) {
-				errs.Add(fmt.Errorf("timeout waiting for request plugins to Stop"))
-				return errs.ToErr()
-			}
+		case <-time.After(duration):
+			errs.Add(fmt.Errorf("timeout waiting for request plugins to Stop"))
+			return errs.ToErr()
 		}
 	}
 	return nil

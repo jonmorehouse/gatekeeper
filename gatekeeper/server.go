@@ -70,17 +70,12 @@ func (s *ProxyServer) startHTTP() error {
 		errCh <- err
 	}()
 
-	// now we wait a maximum of 100milliseconds, which is arbitrary to
-	// catch any immediate errors from the listener
-	timeout := time.Now().Add(time.Millisecond * 100)
 	for {
 		select {
 		case err := <-errCh:
 			return err
-		default:
-			if time.Now().After(timeout) {
-				goto finished
-			}
+		case <-time.After(time.Millisecond * 100):
+			goto finished
 		}
 	}
 

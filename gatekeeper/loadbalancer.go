@@ -63,7 +63,6 @@ func (l *loadBalancer) Start() error {
 }
 
 func (l *loadBalancer) Stop(duration time.Duration) error {
-	timeout := time.Now().Add(duration)
 	errs := NewAsyncMultiError()
 	if err := l.broadcaster.RemoveListener(l.listenID); err != nil {
 		errs.Add(err)
@@ -99,11 +98,9 @@ func (l *loadBalancer) Stop(duration time.Duration) error {
 		select {
 		case <-doneCh:
 			goto done
-		default:
-			if time.Now().After(timeout) {
-				errs.Add(fmt.Errorf("Did not stop quickly enough"))
-				goto done
-			}
+		case <-time.After(duration):
+			errs.Add(fmt.Errorf("Did not stop quickly enough"))
+			goto done
 		}
 	}
 done:

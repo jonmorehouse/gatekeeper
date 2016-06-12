@@ -62,9 +62,8 @@ func (p *UpstreamPublisher) Start() error {
 	return errs.ToErr()
 }
 
-func (p *UpstreamPublisher) Stop(dur time.Duration) error {
+func (p *UpstreamPublisher) Stop(duration time.Duration) error {
 	errs := NewAsyncMultiError()
-	timeout := time.Now().Add(dur)
 
 	var wg sync.WaitGroup
 	doneCh := make(chan interface{})
@@ -74,7 +73,7 @@ func (p *UpstreamPublisher) Stop(dur time.Duration) error {
 		wg.Add(1)
 		go func(p PluginManager) {
 			defer wg.Done()
-			if err := p.Stop(dur); err != nil {
+			if err := p.Stop(duration); err != nil {
 				errs.Add(err)
 			}
 		}(manager)
@@ -89,10 +88,9 @@ func (p *UpstreamPublisher) Stop(dur time.Duration) error {
 		select {
 		case <-doneCh:
 			return errs.ToErr()
-		default:
-			if time.Now().After(timeout) {
-				return errs.ToErr()
-			}
+		case <-time.After(duration):
+			errs.Add(fmt.Errorf("timeout"))
+			return errs.ToErr()
 		}
 	}
 }
