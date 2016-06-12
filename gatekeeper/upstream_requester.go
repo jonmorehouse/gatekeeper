@@ -75,7 +75,6 @@ func (r *AsyncUpstreamRequester) listener() {
 		case <-r.stopCh:
 			r.stopCh <- struct{}{}
 			return
-		default:
 		}
 	}
 }
@@ -122,15 +121,12 @@ func (r *AsyncUpstreamRequester) Stop(duration time.Duration) error {
 	r.listenID = NilEventListenerID
 	r.stopCh <- struct{}{}
 
-	timeout := time.Now().Add(duration)
 	for {
 		select {
 		case <-r.stopCh:
 			goto finish
-		default:
-			if time.Now().After(timeout) {
-				return fmt.Errorf("Timed out waiting for worker goroutine to stop")
-			}
+		case <-time.After(duration):
+			return fmt.Errorf("Timed out waiting for worker goroutine to stop")
 		}
 	}
 

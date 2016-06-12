@@ -109,7 +109,6 @@ func (m pluginManager) buildPlugin() (Plugin, func(), error) {
 }
 
 func (p *pluginManager) Stop(duration time.Duration) error {
-	timeout := time.Now().Add(duration)
 	errs := NewAsyncMultiError()
 
 	// stop each plugin in a goroutine
@@ -139,11 +138,9 @@ func (p *pluginManager) Stop(duration time.Duration) error {
 		select {
 		case <-doneCh:
 			goto cleanup
-		default:
-			if time.Now().After(timeout) {
-				errs.Add(fmt.Errorf("Timed out waiting for plugins to stop..."))
-				goto cleanup
-			}
+		case <-time.After(duration):
+			errs.Add(fmt.Errorf("Timed out waiting for plugins to stop..."))
+			goto cleanup
 		}
 	}
 
