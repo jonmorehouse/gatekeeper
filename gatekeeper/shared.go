@@ -1,10 +1,11 @@
 package gatekeeper
 
 import (
-	"fmt"
 	"net/http"
-	"regexp"
+	"net/url"
 	"strings"
+
+	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 func Retry(f func() error, retries uint) error {
@@ -20,16 +21,26 @@ func Retry(f func() error, retries uint) error {
 }
 
 func ReqPrefix(req *http.Request) string {
-	// normalize the requestPath to end with a "/" if it doesn't already
-	re := regexp.MustCompile(".*/$")
-	if !re.MatchString(req.URL.Path) {
-		req.URL.Path = fmt.Sprintf("%s/", req.URL.Path)
-	}
-
 	pieces := strings.Split(req.URL.Path, "/")
 	if len(pieces) == 0 || len(pieces) == 1 {
 		return ""
 	}
 
 	return pieces[1]
+}
+
+func PrepareBackendRequest(req *http.Request, upstream *shared.Upstream, backend shared.Backend) {
+	prefix := ReqPrefix(req)
+	for _, upstreamPrefix := range upstream.Prefixes {
+		if prefix != upstreamPrefix {
+			continue
+		}
+
+		req.URL.Path = "/" + strings.TrimPrefix(req.URL.Path, "/"+prefix+"/")
+		break
+	}
+
+	backendURL, _ := url.Parse(backend.Address)
+	req.URL.Host = backendURL.Host
+	req.URL.Scheme = backendURL.Scheme
 }

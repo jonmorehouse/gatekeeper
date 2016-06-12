@@ -165,8 +165,8 @@ func (c *RPCClient) GetBackend(upstream shared.UpstreamID) (shared.Backend, *sha
 		Upstream: upstream,
 	}
 	callResp := GetBackendResp{}
-	if err := c.client.Call("plugin.GetBackend", &callArgs, &callResp); err != nil {
-		return shared.NilBackend, callResp.Err
+	if err := c.client.Call("Plugin.GetBackend", &callArgs, &callResp); err != nil {
+		return shared.NilBackend, shared.NewError(err)
 	}
 	return callResp.Backend, callResp.Err
 }

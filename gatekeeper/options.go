@@ -43,8 +43,6 @@ type Options struct {
 	// error out.
 	HTTPPublicPort   uint
 	HTTPInternalPort uint
-	TCPPublicPort    uint
-	TCPInternalPort  uint
 }
 
 func ValidatePlugins(paths []string) ([]string, error) {

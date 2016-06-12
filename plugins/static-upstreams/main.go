@@ -35,8 +35,10 @@ func (s *StaticUpstreams) Stop() *shared.Error {
 
 func (s *StaticUpstreams) worker() {
 	upstr := shared.Upstream{
-		ID:   shared.NewUpstreamID(),
-		Name: "httpbin",
+		ID:        shared.NewUpstreamID(),
+		Name:      "httpbin",
+		Prefixes:  []string{"httpbin"},
+		Hostnames: []string{"httpbin.org", "httpbin"},
 	}
 	err := s.manager.AddUpstream(upstr)
 	if err != nil {
@@ -44,7 +46,9 @@ func (s *StaticUpstreams) worker() {
 	}
 
 	backend := shared.Backend{
-		Address: "https://httpbin.org",
+		ID:      shared.NewBackendID(),
+		Address: "http://localhost:8002",
+		//Address: "https://httpbin.org",
 	}
 
 	err = s.manager.AddBackend(upstr.ID, backend)

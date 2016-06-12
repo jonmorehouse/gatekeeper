@@ -38,6 +38,7 @@ func (l *LoadBalancer) Heartbeat() *shared.Error                            { re
 
 // actual implementation of methods used
 func (l *LoadBalancer) AddBackend(upstream shared.UpstreamID, backend shared.Backend) *shared.Error {
+	log.Println(upstream, backend)
 	// TODO: handle duplicate backends here
 	if _, ok := l.upstreamBackends[upstream]; !ok {
 		l.upstreamBackends[upstream] = make([]shared.Backend, 0, 1)
@@ -71,9 +72,9 @@ func (l *LoadBalancer) RemoveBackend(deleted shared.Backend) *shared.Error {
 func (l *LoadBalancer) GetBackend(upstream shared.UpstreamID) (shared.Backend, *shared.Error) {
 	backends, found := l.upstreamBackends[upstream]
 	if !found {
-		return shared.NilBackend, shared.NewError(fmt.Errorf("Upstream not found"))
+		return shared.NilBackend, shared.NewError(fmt.Errorf("UPSTREAM_NOT_FOUND"))
 	} else if len(backends) == 0 {
-		return shared.NilBackend, shared.NewError(fmt.Errorf("No backends found"))
+		return shared.NilBackend, shared.NewError(fmt.Errorf("NO_BACKENDS_FOUND"))
 	}
 
 	// pick a random backend for this upstream and return it

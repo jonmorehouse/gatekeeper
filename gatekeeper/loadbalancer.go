@@ -167,7 +167,15 @@ func (l *loadBalancer) GetBackend(upstream *shared.Upstream) (shared.Backend, er
 		return shared.NilBackend, err
 	}
 
-	// NOTE we only pass along the UpstreamID because we don't want to send
-	// the entirety of the upstream over the wire each and every time.
-	return plugin.(loadbalancer_plugin.Plugin).GetBackend(upstream.ID)
+	// cast this plugin safely to the correct type
+	lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+	if !ok {
+		return shared.NilBackend, fmt.Errorf("Invalid plugin type; this should not happen")
+	}
+
+	backend, errPtr := lbPlugin.GetBackend(upstream.ID)
+	if errPtr != nil {
+		return shared.NilBackend, errPtr
+	}
+	return backend, nil
 }

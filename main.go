@@ -37,8 +37,6 @@ func main() {
 	// Configure Listen Ports for different protocols
 	flag.UintVar(&options.HTTPPublicPort, "http-public-port", 8000, "listen port for http-public traffic. default: 8000")
 	flag.UintVar(&options.HTTPInternalPort, "http-internal-port", 8001, "listen port for http-internal traffic. default: 8001")
-	flag.UintVar(&options.TCPPublicPort, "tcp-public-port", 8002, "listen port for tcp-public-traffic. default: 8002")
-	flag.UintVar(&options.TCPInternalPort, "tcp-internal-port", 8003, "listen port for tcp-internal traffic. default: 8003")
 
 	flag.Parse()
 
@@ -55,7 +53,8 @@ func main() {
 		log.Fatal("Invalid JSON for loadbalancer-plugin-opts")
 	}
 
-	// build the application
+	// build the server application which manages multiple servers
+	// listening on multiple ports.
 	app, err := gatekeeper.New(options)
 	if err != nil {
 		log.Fatal(err)
