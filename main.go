@@ -31,8 +31,13 @@ func main() {
 	flag.UintVar(&options.LoadBalancerPluginsCount, "loadbalancer-plugins-count", 1, "number of instances of each loadbalancer plugin to operate")
 	loadBalancerPluginOpts := flag.String("loadbalancer-plugins-opts", "{}", "json encoded options to be passed to each loadbalancer plugin")
 
-	// TODO RequestModifierPlugins
+	// RequestPlugin configuration
+	requestPlugins := flag.String("request-plugins", "request-modifier", "comma delimited list of request plugin executables")
+	flag.UintVar(&options.RequestPluginsCount, "request-plugins-count", 1, "number of instances of each request plugin to operate")
+	requestPluginOpts := flag.String("request-plugins-opts", "{}", "json encoded options to be passed to each request plugin")
+
 	// TODO ResponseModifierPlugins
+	// TODO LogPlugin options
 
 	// Configure Listen Ports for different protocols
 	flag.UintVar(&options.HTTPPublicPort, "http-public-port", 8000, "listen port for http-public traffic. default: 8000")
@@ -42,15 +47,25 @@ func main() {
 
 	// parse flags into the correct gatekeeper.Options attributes
 	var err error
+
+	// validate upstream plugin options
 	options.UpstreamPlugins = strings.Split(*upstreamPlugins, ",")
 	options.UpstreamPluginOpts, err = parseJSONOpts(*upstreamPluginOpts)
 	if err != nil {
 		log.Fatal("Invalid JSON for upstream-plugin-opts")
 	}
 
+	// validate load balancer plugin options
 	options.LoadBalancerPluginOpts, err = parseJSONOpts(*loadBalancerPluginOpts)
 	if err != nil {
 		log.Fatal("Invalid JSON for loadbalancer-plugin-opts")
+	}
+
+	// validate request plugin options
+	options.RequestPlugins = strings.Split(*requestPlugins, ",")
+	options.RequestPluginOpts, err = parseJSONOpts(*requestPluginOpts)
+	if err != nil {
+		log.Fatal("Invalid JSON for request-plugin-opts")
 	}
 
 	// build the server application which manages multiple servers

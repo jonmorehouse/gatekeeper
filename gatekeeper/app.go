@@ -20,6 +20,7 @@ type App struct {
 	broadcaster       EventBroadcaster
 	upstreamPublisher *UpstreamPublisher
 	upstreamRequester UpstreamRequester
+	requestModifier   RequestModifier
 	loadBalancer      LoadBalancer
 }
 
@@ -71,11 +72,18 @@ func New(options Options) (*App, error) {
 	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginOpts, options.LoadBalancerPluginsCount, LoadBalancerPlugin)
 	loadBalancer := NewLoadBalancer(broadcaster, loadBalancerPlugin)
 
-	// RequestModifier types are used to allow for requestModification via
-	// plugin.
-	// NOTE: this currently doesn't respect the ModifierPlugin options
-	// because no such plugins currently exist.
-	requestModifier := &LocalRequestModifier{}
+	// for each specified RequestModifier, we create a PluginManager for
+	// that particular instance. The PluginManager manages the lifecycle of
+	// each RequestPlugin
+	requestPlugins := make([]PluginManager, 0, len(options.RequestPlugins))
+	for _, pluginCmd := range options.RequestPlugins {
+		plugin := NewPluginManager(pluginCmd, options.RequestPluginOpts, options.RequestPluginsCount, RequestPlugin)
+		requestPlugins = append(requestPlugins, plugin)
+	}
+
+	// the requestModifier is responsible for modifying requests by calling
+	// the RequestModifier plugins specified
+	requestModifier := NewRequestModifier(requestPlugins)
 
 	// ResponseModifier types are used to allow Responses to be modified
 	// over RPC, allowing for users to handle responses as they'd like.
@@ -83,12 +91,17 @@ func New(options Options) (*App, error) {
 	// because no such plugins currently exist.
 	responseModifier := &LocalResponseModifier{}
 
+	// Proxier is the naive type which _actually_ handles proxying of
+	// requests out to the backend address
+	proxier := NewProxier()
+
 	// build out each server type
 	servers := make([]Server, 0, 4)
 	if options.HTTPPublicPort != 0 {
 		servers = append(servers, &ProxyServer{
 			port:              options.HTTPPublicPort,
 			protocol:          shared.HTTPPublic,
+			proxier:           proxier,
 			upstreamRequester: upstreamRequester,
 			loadBalancer:      loadBalancer,
 			requestModifier:   requestModifier,
@@ -105,6 +118,7 @@ func New(options Options) (*App, error) {
 		upstreamRequester: upstreamRequester,
 		upstreamPublisher: upstreamPublisher,
 		loadBalancer:      loadBalancer,
+		requestModifier:   requestModifier,
 		servers:           servers,
 	}, nil
 }
@@ -119,6 +133,7 @@ func (a *App) Start() error {
 		a.upstreamRequester,
 		a.loadBalancer,
 		a.upstreamPublisher,
+		a.requestModifier,
 	}
 	for _, job := range syncStart {
 		if err := job.Start(); err != nil {
@@ -170,6 +185,7 @@ func (a *App) Stop(duration time.Duration) error {
 		a.upstreamRequester,
 		a.loadBalancer,
 		a.upstreamPublisher,
+		a.requestModifier,
 	}
 	for _, job := range jobs {
 		wg.Add(1)

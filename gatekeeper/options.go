@@ -24,11 +24,11 @@ type Options struct {
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	RequestModifierPlugins []string
+	RequestPlugins []string
 	// number of instances to run
-	RequestModifierPluginsCount uint
+	RequestPluginsCount uint
 	// Opts to be passed along to plugin. Not currently used
-	RequestModifierPluginOpts map[string]interface{}
+	RequestPluginOpts map[string]interface{}
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
@@ -81,6 +81,16 @@ func (o *Options) Validate() error {
 
 	if o.LoadBalancerPluginsCount == 0 {
 		return fmt.Errorf("LOAD_BALANCER_PLUGIN_COUNT_ZERO")
+	}
+
+	// verify that Request plugins are configured correctly
+	if plugins, err := ValidatePlugins(o.RequestPlugins); err != nil {
+		errs.Add(err)
+	} else {
+		o.RequestPlugins = plugins
+	}
+	if o.RequestPluginsCount == 0 {
+		return fmt.Errorf("REQUEST_PLUGIN_COUNT_ZERO")
 	}
 
 	return errs.ToErr()

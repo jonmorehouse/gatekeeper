@@ -8,6 +8,7 @@ import (
 	"time"
 
 	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
+	request_plugin "github.com/jonmorehouse/gatekeeper/plugin/request"
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
@@ -88,6 +89,9 @@ func (m pluginManager) buildPlugin() (Plugin, func(), error) {
 	}
 	if m.pluginType == LoadBalancerPlugin {
 		return loadbalancer_plugin.NewClient(m.pluginName, m.pluginCmd)
+	}
+	if m.pluginType == RequestPlugin {
+		return request_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
 
 	return nil, nil, fmt.Errorf("INVALID_PLUGIN_TYPE")

@@ -3,7 +3,6 @@ package gatekeeper
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"sync"
 	"time"
 
@@ -14,11 +13,11 @@ type UpstreamRequester interface {
 	Start() error
 	Stop(time.Duration) error
 
-	UpstreamForRequest(*http.Request) (*shared.Upstream, error)
+	UpstreamForRequest(*shared.Request) (*shared.Upstream, shared.UpstreamMatchType, error)
 }
 
 type UpstreamRequesterClient interface {
-	UpstreamForRequest(*http.Request) (*shared.Upstream, error)
+	UpstreamForRequest(*shared.Request) (*shared.Upstream, shared.UpstreamMatchType, error)
 }
 
 type AsyncUpstreamRequester struct {
@@ -141,33 +140,34 @@ finish:
 	return nil
 }
 
-func (r *AsyncUpstreamRequester) UpstreamForRequest(req *http.Request) (*shared.Upstream, error) {
+func (r *AsyncUpstreamRequester) UpstreamForRequest(req *shared.Request) (*shared.Upstream, shared.UpstreamMatchType, error) {
 	r.Lock()
 	defer r.Unlock()
+
 	hostname := req.Host
-	prefix := ReqPrefix(req)
+	prefix := req.Prefix
 
 	// check hostname cache
 	if upstream, ok := r.upstreamsByHostname[hostname]; hostname != "" && ok {
-		return upstream, nil
+		return upstream, shared.HostnameMatch, nil
 	}
 
 	// check prefix cache
 	if upstream, ok := r.upstreamsByPrefix[prefix]; prefix != "" && ok {
-		return upstream, nil
+		return upstream, shared.PrefixMatch, nil
 	}
 
 	// check all knownUpstreams, returning the first match
 	for _, upstream := range r.knownUpstreams {
 		if upstream.HasHostname(hostname) {
 			r.upstreamsByHostname[hostname] = &upstream
-			return &upstream, nil
+			return &upstream, shared.HostnameMatch, nil
 		}
 		if upstream.HasPrefix(prefix) {
 			r.upstreamsByPrefix[prefix] = &upstream
-			return &upstream, nil
+			return &upstream, shared.PrefixMatch, nil
 		}
 	}
 
-	return nil, fmt.Errorf("No matching upstream for request...")
+	return nil, shared.NilMatch, fmt.Errorf("No matching upstream for request...")
 }
