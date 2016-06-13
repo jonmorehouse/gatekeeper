@@ -30,7 +30,7 @@ type HeartbeatResp struct {
 }
 
 type AddBackendArgs struct {
-	Backend  shared.Backend
+	Backend  *shared.Backend
 	Upstream shared.UpstreamID
 }
 type AddBackendResp struct {
@@ -38,7 +38,7 @@ type AddBackendResp struct {
 }
 
 type RemoveBackendArgs struct {
-	Backend shared.Backend
+	Backend *shared.Backend
 }
 type RemoveBackendResp struct {
 	Err *shared.Error
@@ -48,7 +48,7 @@ type GetBackendArgs struct {
 	Upstream shared.UpstreamID
 }
 type GetBackendResp struct {
-	Backend shared.Backend
+	Backend *shared.Backend
 	Err     *shared.Error
 }
 
@@ -58,39 +58,41 @@ type RPCServer struct {
 }
 
 func (s *RPCServer) Start(args *StartArgs, resp *StartResp) error {
-	resp.Err = s.impl.Start()
+	resp.Err = shared.NewError(s.impl.Start())
 	return nil
 }
 
 func (s *RPCServer) Stop(args *StopArgs, resp *StopResp) error {
-	resp.Err = s.impl.Stop()
+	resp.Err = shared.NewError(s.impl.Stop())
 	return nil
 }
 
 func (s *RPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) error {
-	resp.Err = s.impl.Heartbeat()
+	resp.Err = shared.NewError(s.impl.Heartbeat())
 	return nil
 }
 
 func (s *RPCServer) Configure(args *ConfigureArgs, resp *ConfigureResp) error {
-	resp.Err = s.impl.Configure(args.Opts)
+	resp.Err = shared.NewError(s.impl.Configure(args.Opts))
 	return nil
 }
 
 func (s *RPCServer) AddBackend(args *AddBackendArgs, resp *AddBackendResp) error {
-	resp.Err = s.impl.AddBackend(args.Upstream, args.Backend)
+	resp.Err = shared.NewError(s.impl.AddBackend(args.Upstream, args.Backend))
 	return nil
 }
 
 func (s *RPCServer) RemoveBackend(args *RemoveBackendArgs, resp *RemoveBackendResp) error {
 	if err := s.impl.RemoveBackend(args.Backend); err != nil {
-		resp.Err = err
+		resp.Err = shared.NewError(err)
 	}
 	return nil
 }
 
 func (s *RPCServer) GetBackend(args *GetBackendArgs, resp *GetBackendResp) error {
-	resp.Backend, resp.Err = s.impl.GetBackend(args.Upstream)
+	backend, err := s.impl.GetBackend(args.Upstream)
+	resp.Backend = backend
+	resp.Err = shared.NewError(err)
 	return nil
 }
 
@@ -137,7 +139,7 @@ func (c *RPCClient) Configure(opts map[string]interface{}) *shared.Error {
 	return callResp.Err
 }
 
-func (c *RPCClient) AddBackend(upstream shared.UpstreamID, backend shared.Backend) *shared.Error {
+func (c *RPCClient) AddBackend(upstream shared.UpstreamID, backend *shared.Backend) *shared.Error {
 	callArgs := AddBackendArgs{
 		Upstream: upstream,
 		Backend:  backend,
@@ -149,7 +151,7 @@ func (c *RPCClient) AddBackend(upstream shared.UpstreamID, backend shared.Backen
 	return callResp.Err
 }
 
-func (c *RPCClient) RemoveBackend(backend shared.Backend) *shared.Error {
+func (c *RPCClient) RemoveBackend(backend *shared.Backend) *shared.Error {
 	callArgs := RemoveBackendArgs{
 		Backend: backend,
 	}
@@ -160,13 +162,13 @@ func (c *RPCClient) RemoveBackend(backend shared.Backend) *shared.Error {
 	return callResp.Err
 }
 
-func (c *RPCClient) GetBackend(upstream shared.UpstreamID) (shared.Backend, *shared.Error) {
+func (c *RPCClient) GetBackend(upstream shared.UpstreamID) (*shared.Backend, *shared.Error) {
 	callArgs := GetBackendArgs{
 		Upstream: upstream,
 	}
 	callResp := GetBackendResp{}
 	if err := c.client.Call("Plugin.GetBackend", &callArgs, &callResp); err != nil {
-		return shared.NilBackend, shared.NewError(err)
+		return nil, shared.NewError(err)
 	}
 	return callResp.Backend, callResp.Err
 }
