@@ -61,7 +61,7 @@ func New(options Options) (*App, error) {
 	// build an upstreamRequester for each server to communicate to the
 	// upstream store. This is used to find the correct upstream for each
 	// request.
-	upstreamRequester := NewAsyncUpstreamRequester(broadcaster)
+	upstreamRequester := NewUpstreamRequester(broadcaster)
 
 	// only one loadbalancer plugin is permitted, this is to ensure that we
 	// actually have sane load balancing! Otherwise, we run the risk of
