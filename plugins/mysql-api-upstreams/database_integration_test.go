@@ -266,7 +266,7 @@ func TestDatabase__AddBackend(t *testing.T) {
 
 	backend := &shared.Backend{
 		Address:     "localhost:port",
-		HealthCheck: "test",
+		Healthcheck: "test",
 	}
 
 	backendID, err := db.AddBackend(upstreamID, backend)
@@ -303,7 +303,7 @@ func TestDatabase__AddBackend__Duplicate(t *testing.T) {
 
 	backend := &shared.Backend{
 		Address:     "localhost",
-		HealthCheck: "/health",
+		Healthcheck: "/health",
 	}
 
 	backendID, err := db.AddBackend(upstreamID, backend)
@@ -327,7 +327,7 @@ func TestDatabase__AddBackend__UpstreamNotFound(t *testing.T) {
 	db := setup(t)
 	backend := &shared.Backend{
 		Address:     "localhost",
-		HealthCheck: "/health",
+		Healthcheck: "/health",
 	}
 
 	backendID, err := db.AddBackend(shared.NilUpstreamID, backend)
@@ -355,7 +355,7 @@ func TestDatabase__RemoveBackend(t *testing.T) {
 
 	backend := &shared.Backend{
 		Address:     "localhost",
-		HealthCheck: "/health",
+		Healthcheck: "/health",
 	}
 	backendID, err := db.AddBackend(upstreamID, backend)
 	if err != nil {
@@ -466,7 +466,7 @@ func TestDatabase__FetchUpstreamBackends(t *testing.T) {
 
 	backend := &shared.Backend{
 		Address:     "localhost",
-		HealthCheck: "/health",
+		Healthcheck: "/health",
 	}
 	backendID, err := db.AddBackend(upstreamID, backend)
 	if err != nil {

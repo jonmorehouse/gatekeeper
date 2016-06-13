@@ -63,7 +63,7 @@ func (l *loadBalancer) Start() error {
 }
 
 func (l *loadBalancer) Stop(duration time.Duration) error {
-	errs := NewAsyncMultiError()
+	errs := NewMultiError()
 	if err := l.broadcaster.RemoveListener(l.listenID); err != nil {
 		errs.Add(err)
 	}
@@ -107,6 +107,26 @@ done:
 	return errs.ToErr()
 }
 
+func (l *loadBalancer) GetBackend(upstream *shared.Upstream) (*shared.Backend, error) {
+	plugin, err := l.pluginManager.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	// cast this plugin safely to the correct type
+	lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+	if !ok {
+		shared.ProgrammingError("PluginManager returned an instance that was not a LoadBalancer")
+		return nil, fmt.Errorf("Invalid plugin type; this should not happen")
+	}
+
+	backend, errPtr := lbPlugin.GetBackend(upstream.ID)
+	if errPtr != nil {
+		return nil, errPtr
+	}
+	return backend, nil
+}
+
 func (l *loadBalancer) worker() {
 	for {
 		select {
@@ -145,7 +165,7 @@ func (l *loadBalancer) handleEvent(event UpstreamEvent) {
 	}
 
 	var wg sync.WaitGroup
-	errs := NewAsyncMultiError()
+	errs := NewMultiError()
 	for _, plugin := range plugins {
 		wg.Add(1)
 
@@ -156,23 +176,4 @@ func (l *loadBalancer) handleEvent(event UpstreamEvent) {
 			}
 		}(plugin.(loadbalancer_plugin.Plugin))
 	}
-}
-
-func (l *loadBalancer) GetBackend(upstream *shared.Upstream) (*shared.Backend, error) {
-	plugin, err := l.pluginManager.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	// cast this plugin safely to the correct type
-	lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
-	if !ok {
-		return nil, fmt.Errorf("Invalid plugin type; this should not happen")
-	}
-
-	backend, errPtr := lbPlugin.GetBackend(upstream.ID)
-	if errPtr != nil {
-		return nil, errPtr
-	}
-	return backend, nil
 }

@@ -31,7 +31,6 @@ echo "building shared package ..."
 cd "$DIR/shared"
 go build .
 
-
 echo "building plugin/upstream package ..."
 cd "$DIR/plugin/upstream"
 go build .
@@ -41,7 +40,7 @@ cd "$DIR/plugin/loadbalancer"
 go build .
 
 echo "building plugin/event package ..."
-cd "$DIR/plugin/event"
+cd "$DIR/plugin/metric"
 go build .
 
 echo "build plugin/modifier package ..."

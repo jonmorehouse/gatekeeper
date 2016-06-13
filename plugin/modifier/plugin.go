@@ -24,8 +24,29 @@ type Plugin interface {
 	Start() error
 	Stop() error
 
+	// Modify a request, changing anything about the requests' nature.
+	// Specifically this could mean, swapping out the backend, swapping out
+	// the upstream, returning an error, adding a response or anything
+	// else. Adding a Response to the request or adding / returning an
+	// error will stop the request life cycle immediately and will return
+	// immediately. If a response is added, that will be written back
+	// directly where as an error will trigger the ErrorResponse method.
+	// Returning an error from this method should only be done in
+	// extenuating circumstances and will trigger an internal error
 	ModifyRequest(*shared.Request) (*shared.Request, error)
+
+	// Modify the response, changing any attributes, headers, the body,
+	// that are desired before sending the response back to the client.
+	// This method should only return an error in the case of an
+	// extenuating circumstance and/or when the response body can be
+	// dropped all together. Most likely speaking, that would only be in
+	// the case of a fatal failure such as datastore being down etc.
 	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
+
+	// Modify a response that was flagged as an error. This is similar to
+	// the ModifyResponse method, again giving complete control over the
+	// response that is written back to the client.
+	ModifyErrorResponse(error, *shared.Request, *shared.Response) (*shared.Response, error)
 }
 
 // PluginClient is the interface that is exposed to users of this plugin.
@@ -43,6 +64,7 @@ type PluginClient interface {
 
 	ModifyRequest(*shared.Request) (*shared.Request, error)
 	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
+	ModifyErrorResponse(error, *shared.Request, *shared.Response) (*shared.Response, error)
 }
 
 type pluginClient struct {
@@ -91,6 +113,11 @@ func (p *pluginClient) ModifyResponse(req *shared.Request, resp *shared.Response
 	return resp, shared.ErrorToError(err)
 }
 
+func (p *pluginClient) ModifyErrorResponse(respErr error, req *shared.Request, resp *shared.Response) (*shared.Response, error) {
+	resp, err := p.pluginRPC.ModifyErrorResponse(shared.NewError(respErr), req, resp)
+	return resp, shared.ErrorToError(err)
+}
+
 // this is the PluginRPC type that we actually implement as the "plugin"
 // interface. We abstract the error handling away around these so as to allow
 // for us passing concrete error types around.
@@ -102,6 +129,7 @@ type PluginRPC interface {
 
 	ModifyRequest(*shared.Request) (*shared.Request, *shared.Error)
 	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, *shared.Error)
+	ModifyErrorResponse(*shared.Error, *shared.Request, *shared.Response) (*shared.Response, *shared.Error)
 }
 
 type PluginDispenser struct {

@@ -24,9 +24,9 @@ func NewUpstreamID() UpstreamID {
 type UpstreamMatchType uint
 
 const (
-	NilMatch UpstreamMatchType = iota + 1
-	PrefixMatch
-	HostnameMatch
+	NilUpstreamMatch UpstreamMatchType = iota + 1
+	PrefixUpstreamMatch
+	HostnameUpstreamMatch
 )
 
 type Upstream struct {

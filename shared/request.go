@@ -5,15 +5,6 @@ import (
 	"strings"
 )
 
-type RequestError struct {
-	Code uint
-	Body string
-}
-
-func (e *RequestError) Error() string {
-	return e.Body
-}
-
 func ReqPrefix(req *http.Request) string {
 	pieces := strings.Split(req.URL.Path, "/")
 	if len(pieces) == 0 || len(pieces) == 1 {
@@ -54,14 +45,19 @@ type Request struct {
 
 	// at any point of the request lifecycle, a RequestError will result in
 	// an error response being sent back to the client.
-	Err *RequestError
+	Error *Error
+
+	// adding a response to the request will stop the proxying lifecycle
+	// and will immediately result in the response being written back to the
+	// client
+	Response *Response
 }
 
 func NewRequest(req *http.Request, protocol Protocol) *Request {
 	return &Request{
 		Protocol:          protocol,
 		Upstream:          nil,
-		UpstreamMatchType: NilMatch,
+		UpstreamMatchType: NilUpstreamMatch,
 
 		RemoteAddr: req.RemoteAddr,
 		Method:     req.Method,
@@ -79,6 +75,20 @@ func NewRequest(req *http.Request, protocol Protocol) *Request {
 		Fragment: req.URL.Fragment,
 
 		Header: req.Header,
-		Err:    nil,
+		Error:  nil,
 	}
+}
+
+func (r *Request) AddError(err error) {
+	r.Error = NewError(err)
+}
+
+func (r *Request) AddResponse(statusCode int, body []byte, headers map[string][]string) {
+	resp := &Response{}
+	resp.SetCode(statusCode)
+	resp.Body = body
+	resp.ContentLength = int64(len(body))
+	resp.Header = http.Header(headers)
+
+	r.Response = resp
 }

@@ -38,19 +38,16 @@ func (p *Plugin) ModifyRequest(req *shared.Request) (*shared.Request, error) {
 	}
 	p.counter += 1
 	req.Header["X-Request-ID"] = []string{fmt.Sprintf("%d", p.counter)}
-	log.Println("adding X-Request-ID header to the request")
 	return req, nil
 }
 
 func (Plugin) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
 	resp.Header.Set("X-Request-ID", req.Header["X-Request-ID"][0])
+	return resp, nil
+}
 
-	//// replace the body with a custom message
-	//reader := strings.NewReader("hello world this was overwritten in a plugin")
-	//if err := resp.SetBody(reader); err != nil {
-	//return resp, err
-	//}
-
+func (Plugin) ModifyErrorResponse(err error, req *shared.Request, resp *shared.Response) (*shared.Response, error) {
+	//resp.Header.Add("X-Error", "error")
 	return resp, nil
 }
 

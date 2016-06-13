@@ -2,7 +2,6 @@ package gatekeeper
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -18,11 +17,12 @@ type Server interface {
 }
 
 type ProxyServer struct {
-	port              uint
-	protocol          shared.Protocol
-	upstreamRequester UpstreamRequesterClient
-	loadBalancer      LoadBalancerClient
-	modifier          Modifier
+	port            uint
+	protocol        shared.Protocol
+	upstreamMatcher UpstreamMatcherClient
+	loadBalancer    LoadBalancerClient
+	modifier        Modifier
+	metricWriter    MetricWriter
 
 	stopAccepting bool
 
@@ -32,6 +32,7 @@ type ProxyServer struct {
 }
 
 func (s *ProxyServer) Start() error {
+	s.eventMetric(shared.ServerStartedEvent)
 	return s.startHTTP()
 }
 
@@ -41,6 +42,7 @@ func (s *ProxyServer) StopAccepting() error {
 }
 
 func (s *ProxyServer) Stop(duration time.Duration) error {
+	s.eventMetric(shared.ServerStoppedEvent)
 	s.httpServer.Stop(duration)
 	return <-s.errCh
 }
@@ -84,44 +86,143 @@ finished:
 }
 
 func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
+	start := time.Now()
+	req := shared.NewRequest(rawReq, s.protocol)
+
+	metric := &shared.RequestMetric{
+		Request:        req,
+		RequestStartTS: start,
+	}
+
+	s.eventMetric(shared.RequestAcceptedEvent)
+
+	// finish the request metric, and emit it to the MetricWriter at the
+	// end of this function, after the response has been written
+	defer func(metric *shared.RequestMetric) {
+		metric.Timestamp = time.Now()
+		metric.RequestEndTS = time.Now()
+		metric.Latency = time.Now().Sub(start)
+		metric.InternalLatency = metric.Latency - metric.ProxyLatency
+		metric.ResponseType = shared.NewResponseType(metric.Response.StatusCode)
+
+		// emit the request metric to the MetricWriter
+		s.metricWriter.RequestMetric(metric)
+	}(metric)
+
 	if s.stopAccepting {
-		io.WriteString(rw, "SERVER_SHUTTING_DOWN")
+		resp := shared.NewErrorResponse(500, ServerShuttingDownError)
+		metric.Response = resp
+		metric.Error = ServerShuttingDownError
+		s.writeError(rw, ServerShuttingDownError, req, resp)
 		return
 	}
 
 	// build a *shared.Request for this rawReq; a wrapper with additional
 	// meta information around an *http.Request object
-	req := shared.NewRequest(rawReq, s.protocol)
-	upstream, matchType, err := s.upstreamRequester.UpstreamForRequest(req)
+	matchStartTS := time.Now()
+	upstream, matchType, err := s.upstreamMatcher.Match(req)
 	if err != nil {
-		io.WriteString(rw, "NO_UPSTREAM_FOUND")
+		resp := shared.NewErrorResponse(400, err)
+		metric.Response = resp
+		metric.Error = err
+		s.writeError(rw, err, req, resp)
 		return
 	}
+	metric.UpstreamMatcherLatency = time.Now().Sub(matchStartTS)
 
+	metric.Upstream = upstream
 	req.Upstream = upstream
 	req.UpstreamMatchType = matchType
 
+	// fetch a backend from the loadbalancer to proxy this request too
+	loadBalancerStartTS := time.Now()
 	backend, err := s.loadBalancer.GetBackend(upstream)
 	if err != nil {
-		io.WriteString(rw, "NO_BACKEND_FOUND")
+		resp := shared.NewErrorResponse(500, err)
+		metric.Response = resp
+		metric.Error = err
+		s.writeError(rw, err, req, resp)
 		return
 	}
+	metric.LoadBalancerLatency = time.Now().Sub(loadBalancerStartTS)
+	metric.Backend = backend
 
+	modifierStartTS := time.Now()
 	req, err = s.modifier.ModifyRequest(req)
 	if err != nil {
-		log.Println(err)
-		io.WriteString(rw, "FAILURE_TO_MODIFY_REQUEST")
+		resp := shared.NewErrorResponse(500, err)
+		metric.Error = err
+		metric.Response = resp
+		s.writeError(rw, err, req, resp)
 		return
 	}
-	if req.Err != nil {
-		io.WriteString(rw, "request modifier failed")
+	metric.RequestModifierLatency = time.Now().Sub(modifierStartTS)
+
+	if req.Error != nil {
+		resp := shared.NewErrorResponse(500, err)
+		metric.Error = req.Error
+		metric.Response = resp
+		s.writeError(rw, err, req, resp)
 		return
 	}
 
-	// pass the request along to the proxier to perform the request
-	// lifecycle on to the backend.
-	if err := s.proxier.Proxy(rw, rawReq, req, backend); err != nil {
-		io.WriteString(rw, "UNABLE_TO_PROXY")
+	if req.Response != nil {
+		metric.Response = req.Response
+		s.writeResponse(rw, req.Response)
 		return
 	}
+
+	// the proxier will only return an error when it is having an internal
+	// problem and was unable to even start the proxy cycle. Any sort of
+	// proxy error in the proxy lifecycle is handled internally, due to the
+	// coupling that is required with the internal go httputil.ReverseProxy
+	// and http.Transport types
+	if err := s.proxier.Proxy(rw, rawReq, req, backend, metric); err != nil {
+		resp := shared.NewErrorResponse(500, err)
+		metric.Response = resp
+		metric.Error = err
+		s.writeError(rw, err, req, resp)
+		return
+	}
+
+	s.eventMetric(shared.RequestSuccessEvent)
+}
+
+// write an error response, calling the ErrorResponse handler in the modifier plugin
+func (s *ProxyServer) writeError(rw http.ResponseWriter, err error, request *shared.Request, response *shared.Response) {
+	response, err = s.modifier.ModifyErrorResponse(err, request, response)
+	if err != nil {
+		response.Body = []byte(ModifierPluginError.String())
+		response.StatusCode = 500
+	}
+
+	s.eventMetric(shared.RequestErrorEvent)
+	s.writeResponse(rw, response)
+}
+
+// write a *shared.Response to an http.ResponseWriter
+func (s *ProxyServer) writeResponse(rw http.ResponseWriter, response *shared.Response) {
+	rw.WriteHeader(response.StatusCode)
+
+	for header, values := range response.Header {
+		for _, value := range values {
+			rw.Header().Set(header, value)
+		}
+	}
+
+	// TODO: add metrics around this error to see where it happens in
+	// practice; adding robustness once error edges have shown
+	written, err := rw.Write(response.Body)
+	if err != nil {
+		log.Println(ResponseWriteError, err)
+	} else if written != len(response.Body) {
+		log.Println(ResponseWriteError)
+	}
+}
+
+func (s *ProxyServer) eventMetric(event shared.MetricEvent) {
+	s.metricWriter.EventMetric(&shared.EventMetric{
+		Event:     event,
+		Timestamp: time.Now(),
+	})
 }

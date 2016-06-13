@@ -119,7 +119,7 @@ func (p *Plugin) Start(rpcManager upstream_plugin.Manager) error {
 	p.apiBackend = &shared.Backend{
 		ID:          shared.NewBackendID(),
 		Address:     fmt.Sprintf("http://127.0.0.1:%d", p.config.Port),
-		HealthCheck: "/health",
+		Healthcheck: "/health",
 	}
 	if err := p.rpcManager.AddBackend(p.apiUpstream.ID, p.apiBackend); err != nil {
 		return fmt.Errorf("Unable to register backend for upstream plugin")

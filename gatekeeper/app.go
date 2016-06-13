@@ -1,8 +1,6 @@
 package gatekeeper
 
 import (
-	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -21,7 +19,7 @@ type App struct {
 	metricWriter      MetricWriter
 	broadcaster       EventBroadcaster
 	upstreamPublisher *UpstreamPublisher
-	upstreamRequester UpstreamRequester
+	upstreamMatcher   UpstreamMatcher
 	modifier          Modifier
 	loadBalancer      LoadBalancer
 }
@@ -33,13 +31,18 @@ func New(options Options) (*App, error) {
 
 	// MetricWriter is a wrapper around a series of Event plugins which is
 	// used by various processes around teh application to emit metrics and
-	// erros to the Event plugin
-	eventPlugins := make([]PluginManager, 0, len(options.EventPlugins))
-	for _, pluginCmd := range options.EventPlugins {
-		plugin := NewPluginManager(pluginCmd, options.EventPluginOpts, options.EventPluginsCount, EventPlugin)
-		eventPlugins = append(eventPlugins, plugin)
+	// errors to the Event plugin
+	metricPlugins := make([]PluginManager, len(options.MetricPlugins), len(options.MetricPlugins))
+	metricWriter := NewMetricWriter(metricPlugins)
+	for idx, pluginCmd := range options.MetricPlugins {
+		plugin := NewPluginManager(pluginCmd, options.MetricPluginOpts, options.MetricPluginsCount, MetricPlugin, metricWriter)
+		metricPlugins[idx] = plugin
 	}
-	metricWriter := NewMetricWriter(eventPlugins)
+
+	metricWriter.EventMetric(&shared.EventMetric{
+		Timestamp: time.Now(),
+		Event:     shared.AppStartedEvent,
+	})
 
 	// the broadcaster is what glues everything together. It is responsible
 	// for dispensing events throughout the server so that plugins can
@@ -54,7 +57,7 @@ func New(options Options) (*App, error) {
 	// parent program.
 	upstreamPlugins := make([]PluginManager, 0, len(options.UpstreamPlugins))
 	for _, pluginCmd := range options.UpstreamPlugins {
-		plugin := NewPluginManager(pluginCmd, options.UpstreamPluginOpts, options.UpstreamPluginsCount, UpstreamPlugin)
+		plugin := NewPluginManager(pluginCmd, options.UpstreamPluginOpts, options.UpstreamPluginsCount, UpstreamPlugin, metricWriter)
 		upstreamPlugins = append(upstreamPlugins, plugin)
 	}
 
@@ -63,61 +66,62 @@ func New(options Options) (*App, error) {
 	// because it implements the Manager interface and is what the
 	// RPCServer that is launched inside of each RPCClient uses to emit
 	// messages too
-	upstreamPublisher := NewUpstreamPublisher(upstreamPlugins, broadcaster)
+	upstreamPublisher := NewUpstreamPublisher(upstreamPlugins, broadcaster, metricWriter)
 	// when the upstream plugins are configured, the publisher gets passed
 	// to them and used as the manager type. This allows the upstreamPlugin
 	// to talk back into this parent process.
 	options.UpstreamPluginOpts["manager"] = upstreamPublisher
 
-	// build an upstreamRequester for each server to communicate to the
+	// build an upstreamMatcher for each server to communicate to the
 	// upstream store. This is used to find the correct upstream for each
 	// request.
-	upstreamRequester := NewUpstreamRequester(broadcaster)
+	upstreamMatcher := NewUpstreamMatcher(broadcaster)
 
 	// only one loadbalancer plugin is permitted, this is to ensure that we
 	// actually have sane load balancing! Otherwise, we run the risk of
 	// having multiple different load balancing algorithms at once.
-	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginOpts, options.LoadBalancerPluginsCount, LoadBalancerPlugin)
+	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginOpts, options.LoadBalancerPluginsCount, LoadBalancerPlugin, metricWriter)
 	loadBalancer := NewLoadBalancer(broadcaster, loadBalancerPlugin)
 
 	// for each specified Modifier plugin, we create a PluginManager which
 	// manages the lifecycle of the plugin.
 	modifierPlugins := make([]PluginManager, 0, len(options.ModifierPlugins))
 	for _, pluginCmd := range options.ModifierPlugins {
-		plugin := NewPluginManager(pluginCmd, options.ModifierPluginOpts, options.ModifierPluginsCount, ModifierPlugin)
+		plugin := NewPluginManager(pluginCmd, options.ModifierPluginOpts, options.ModifierPluginsCount, ModifierPlugin, metricWriter)
 		modifierPlugins = append(modifierPlugins, plugin)
 	}
 
 	// modifier is a type that wraps a series of modifier plugins and is
 	// used by the Server and Proxier to actually modify requests and
 	// responses
-	modifier := NewModifier(modifierPlugins)
+	modifier := NewModifier(modifierPlugins, metricWriter)
 
 	// Proxier is the naive type which _actually_ handles proxying of
 	// requests out to the backend address.
-	proxier := NewProxier(modifier, options.DefaultTimeout)
+	proxier := NewProxier(modifier, metricWriter)
 
 	// build out each server type
 	servers := make([]Server, 0, 4)
 	if options.HTTPPublicPort != 0 {
 		servers = append(servers, &ProxyServer{
-			port:              options.HTTPPublicPort,
-			protocol:          shared.HTTPPublic,
-			proxier:           proxier,
-			upstreamRequester: upstreamRequester,
-			loadBalancer:      loadBalancer,
-			modifier:          modifier,
+			port:            options.HTTPPublicPort,
+			protocol:        shared.HTTPPublic,
+			proxier:         proxier,
+			upstreamMatcher: upstreamMatcher,
+			loadBalancer:    loadBalancer,
+			modifier:        modifier,
+			metricWriter:    metricWriter,
 		})
 	}
 
 	if len(servers) == 0 {
-		return nil, fmt.Errorf("at least one server must be specified")
+		return nil, ConfigurationError
 	}
 
 	return &App{
 		metricWriter:      metricWriter,
 		broadcaster:       broadcaster,
-		upstreamRequester: upstreamRequester,
+		upstreamMatcher:   upstreamMatcher,
 		upstreamPublisher: upstreamPublisher,
 		loadBalancer:      loadBalancer,
 		modifier:          modifier,
@@ -133,14 +137,14 @@ func (a *App) Start() error {
 	// upstreams/backends at start time and never again.
 	syncStart := []startStop{
 		a.metricWriter,
-		a.upstreamRequester,
+		a.upstreamMatcher,
 		a.loadBalancer,
 		a.upstreamPublisher,
 		a.modifier,
 	}
 	for _, job := range syncStart {
 		if job == nil {
-			log.Fatal("Misconfigured application")
+			return ConfigurationError
 		}
 
 		if err := job.Start(); err != nil {
@@ -150,7 +154,7 @@ func (a *App) Start() error {
 
 	// start all servers asynchronously
 	var wg sync.WaitGroup
-	errs := NewAsyncMultiError()
+	errs := NewMultiError()
 	for _, server := range a.servers {
 		wg.Add(1)
 		go func(s startStop) {
@@ -166,7 +170,7 @@ func (a *App) Start() error {
 }
 
 func (a *App) Stop(duration time.Duration) error {
-	errs := NewAsyncMultiError()
+	errs := NewMultiError()
 	var wg sync.WaitGroup
 
 	// stop accepting connections on each server first, and then start the
@@ -189,11 +193,10 @@ func (a *App) Stop(duration time.Duration) error {
 
 	// shutdown all other plugins and internal subscribers
 	jobs := []startStop{
-		a.upstreamRequester,
+		a.upstreamMatcher,
 		a.loadBalancer,
 		a.upstreamPublisher,
 		a.modifier,
-		a.metricWriter,
 	}
 	for _, job := range jobs {
 		wg.Add(1)
@@ -204,7 +207,17 @@ func (a *App) Stop(duration time.Duration) error {
 			}
 		}(job)
 	}
-
 	wg.Wait()
+
+	// emit a metric denoting that the app is stopping
+	a.metricWriter.EventMetric(&shared.EventMetric{
+		Timestamp: time.Now(),
+		Event:     shared.AppStoppedEvent,
+	})
+	// NOTE: we stop the `metricWriter` plugin last, so as to allow for
+	// other plugins to emit metrics to it in their stop methods
+	if err := a.metricWriter.Stop(duration); err != nil {
+		errs.Add(err)
+	}
 	return errs.ToErr()
 }
