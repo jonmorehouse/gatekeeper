@@ -118,11 +118,11 @@ func (c *ManagerRPCClient) RemoveBackend(backendID shared.BackendID) *shared.Err
 
 type ManagerRPCServer struct {
 	impl        Manager
-	connectedCh chan interface{}
+	connectedCh chan struct{}
 }
 
 func (s *ManagerRPCServer) Notify(*NotifyArgs, *NotifyResp) error {
-	s.connectedCh <- new(interface{})
+	s.connectedCh <- struct{}{}
 	return nil
 }
 

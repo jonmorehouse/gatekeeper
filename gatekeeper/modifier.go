@@ -55,7 +55,7 @@ func (r *modifier) Stop(duration time.Duration) error {
 	errs := NewAsyncMultiError()
 
 	var wg sync.WaitGroup
-	doneCh := make(chan interface{})
+	doneCh := make(chan struct{})
 
 	for _, manager := range r.pluginManagers {
 		wg.Add(1)

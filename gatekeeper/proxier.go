@@ -107,7 +107,7 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 	}()
 
 	// in a goroutine, wait for the request to finish.
-	doneCh := make(chan interface{})
+	doneCh := make(chan struct{})
 	go func() {
 		wg.Wait()
 		doneCh <- struct{}{}
