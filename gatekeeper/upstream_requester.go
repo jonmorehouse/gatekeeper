@@ -20,7 +20,7 @@ type UpstreamRequesterClient interface {
 	UpstreamForRequest(*shared.Request) (*shared.Upstream, shared.UpstreamMatchType, error)
 }
 
-type AsyncUpstreamRequester struct {
+type upstreamRequester struct {
 	broadcaster EventBroadcaster
 	listenID    EventListenerID
 	listenCh    EventCh
@@ -32,8 +32,8 @@ type AsyncUpstreamRequester struct {
 	sync.RWMutex
 }
 
-func NewAsyncUpstreamRequester(broadcaster EventBroadcaster) UpstreamRequester {
-	return &AsyncUpstreamRequester{
+func NewUpstreamRequester(broadcaster EventBroadcaster) UpstreamRequester {
+	return &upstreamRequester{
 		broadcaster: broadcaster,
 		listenCh:    make(chan Event),
 		stopCh:      make(chan interface{}),
@@ -44,7 +44,7 @@ func NewAsyncUpstreamRequester(broadcaster EventBroadcaster) UpstreamRequester {
 	}
 }
 
-func (r *AsyncUpstreamRequester) Start() error {
+func (r *upstreamRequester) Start() error {
 	id, err := r.broadcaster.AddListener(r.listenCh, []EventType{UpstreamAdded, UpstreamRemoved})
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func (r *AsyncUpstreamRequester) Start() error {
 	return nil
 }
 
-func (r *AsyncUpstreamRequester) listener() {
+func (r *upstreamRequester) listener() {
 	for {
 		select {
 		case rawEvent := <-r.listenCh:
@@ -79,7 +79,7 @@ func (r *AsyncUpstreamRequester) listener() {
 	}
 }
 
-func (r *AsyncUpstreamRequester) addUpstream(event UpstreamEvent) {
+func (r *upstreamRequester) addUpstream(event UpstreamEvent) {
 	if event.UpstreamID == shared.NilUpstreamID {
 		log.Fatal("Received an invalid upstream event...")
 		return
@@ -89,7 +89,7 @@ func (r *AsyncUpstreamRequester) addUpstream(event UpstreamEvent) {
 	r.knownUpstreams[event.UpstreamID] = event.Upstream
 }
 
-func (r *AsyncUpstreamRequester) removeUpstream(event UpstreamEvent) {
+func (r *upstreamRequester) removeUpstream(event UpstreamEvent) {
 	r.RLock()
 	upstr, ok := r.knownUpstreams[event.UpstreamID]
 	r.RUnlock()
@@ -116,7 +116,7 @@ func (r *AsyncUpstreamRequester) removeUpstream(event UpstreamEvent) {
 	delete(r.knownUpstreams, event.UpstreamID)
 }
 
-func (r *AsyncUpstreamRequester) Stop(duration time.Duration) error {
+func (r *upstreamRequester) Stop(duration time.Duration) error {
 	r.broadcaster.RemoveListener(r.listenID)
 	r.listenID = NilEventListenerID
 	r.stopCh <- struct{}{}
@@ -136,7 +136,7 @@ finish:
 	return nil
 }
 
-func (r *AsyncUpstreamRequester) UpstreamForRequest(req *shared.Request) (*shared.Upstream, shared.UpstreamMatchType, error) {
+func (r *upstreamRequester) UpstreamForRequest(req *shared.Request) (*shared.Upstream, shared.UpstreamMatchType, error) {
 	r.Lock()
 	defer r.Unlock()
 
