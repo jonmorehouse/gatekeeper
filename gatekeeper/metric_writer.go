@@ -41,7 +41,7 @@ type metricWriter struct {
 	pluginManagers   []PluginManager
 }
 
-func NewMetricWriter(pluginManagers []PluginManager, flushInterval time.Duration) MetricWriter {
+func NewMetricWriter(pluginManagers []PluginManager) MetricWriter {
 	maxGeneralBuffer := 100
 	maxRequestBuffer := 100
 	maxErrorBuffer := 100
@@ -61,7 +61,7 @@ func NewMetricWriter(pluginManagers []PluginManager, flushInterval time.Duration
 		errorBuffer:    make([]error, 0, maxErrorBuffer),
 		maxErrorBuffer: maxErrorBuffer,
 
-		maxFlushInterval: flushInterval,
+		maxFlushInterval: time.Millisecond * 100,
 		pluginManagers:   pluginManagers,
 	}
 }
@@ -76,20 +76,37 @@ func (m *metricWriter) Start() error {
 			if err := p.Start(); err != nil {
 				errs.Add(err)
 			}
+			wg.Done()
+		}(pluginManager)
+	}
+
+	wg.Wait()
+	go m.worker()
+	return errs.ToErr()
+}
+
+func (m *metricWriter) Stop(duration time.Duration) error {
+	// make sure that we wait for all messages to flush to the plugins,
+	// regardless of how long it takes
+	m.stopCh <- struct{}{}
+	<-m.stopCh
+
+	errs := NewAsyncMultiError()
+	var wg sync.WaitGroup
+
+	for _, pluginManager := range m.pluginManagers {
+		wg.Add(1)
+		go func(p PluginManager) {
+			if err := p.Stop(duration); err != nil {
+				log.Println(err)
+				errs.Add(err)
+			}
+			wg.Done()
 		}(pluginManager)
 	}
 
 	wg.Wait()
 	return errs.ToErr()
-}
-
-func (m *metricWriter) Stop(duration time.Duration) error {
-	// make sure that we wait for all messages to flush to the plugins
-	m.stopCh <- struct{}{}
-	<-m.stopCh
-
-	// TODO stop the plugins
-	return nil
 }
 
 func (m *metricWriter) GeneralMetric(metric *shared.GeneralMetric) {
@@ -176,6 +193,10 @@ func (m *metricWriter) getPlugins() ([]event_plugin.PluginClient, error) {
 }
 
 func (m *metricWriter) flushGeneral() {
+	if len(m.generalBuffer) == 0 {
+		return
+	}
+
 	plugins, err := m.getPlugins()
 	if err != nil {
 		log.Println("Unable to fetch event plugins.")
@@ -197,6 +218,10 @@ func (m *metricWriter) flushGeneral() {
 }
 
 func (m *metricWriter) flushRequest() {
+	if len(m.requestBuffer) == 0 {
+		return
+	}
+
 	plugins, err := m.getPlugins()
 	if err != nil {
 		log.Println("Unable to fetch event plugins.")
@@ -218,6 +243,10 @@ func (m *metricWriter) flushRequest() {
 }
 
 func (m *metricWriter) flushError() {
+	if len(m.errorBuffer) == 0 {
+		return
+	}
+
 	plugins, err := m.getPlugins()
 	if err != nil {
 		log.Println("Unable to fetch event plugins.")

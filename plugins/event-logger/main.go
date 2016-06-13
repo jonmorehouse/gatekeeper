@@ -10,8 +10,14 @@ import (
 // Plugin is a type that implements the event_plugin.Plugin interface
 type Plugin struct{}
 
-func (*Plugin) Start() error                           { return nil }
-func (*Plugin) Stop() error                            { return nil }
+func (*Plugin) Start() error {
+	log.Println("event-logger started...")
+	return nil
+}
+func (*Plugin) Stop() error {
+	log.Println("event-logger stopped...")
+	return nil
+}
 func (*Plugin) Heartbeat() error                       { return nil }
 func (*Plugin) Configure(map[string]interface{}) error { return nil }
 
@@ -32,7 +38,7 @@ func (*Plugin) Error(err error) error {
 
 func main() {
 	plugin := &Plugin{}
-	if err := event_plugin.RunPlugin("statsd-event-logger", plugin); err != nil {
+	if err := event_plugin.RunPlugin("event-logger", plugin); err != nil {
 		log.Fatal(err)
 	}
 }
