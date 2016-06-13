@@ -63,12 +63,9 @@ func (p *proxier) Proxy(rw http.ResponseWriter, rawReq *http.Request, req *share
 		p.requests[proxyReq] = req
 	}
 
-	// NOTE we respect request timeouts by fetching the upstream timeout and specifying a timeout
-
 	// the proxier type, this local struct acts as the actual Proxier,
 	// simply relying upon the default round trip var to make the requests
 	proxy.Transport = p
-
 	proxy.ServeHTTP(rw, rawReq)
 	return nil
 }
@@ -92,6 +89,11 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 	var wg sync.WaitGroup
 	var err error
 	var rawResp *http.Response
+
+	// set the cancelCh on the request so we can properly clean it up, even
+	// after we've caught the timeout on our transport
+	cancelCh := make(chan struct{})
+	rawReq.Cancel = cancelCh
 
 	// proxy the request, respecting the specified _total_ timeout. For
 	// now, this timeout doesn't differentiate between dial and response
@@ -126,6 +128,7 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 				case <-doneCh:
 					return
 				case <-time.After(timeout):
+					close(cancelCh)
 					err = fmt.Errorf("TIMEOUT")
 					return
 				}
