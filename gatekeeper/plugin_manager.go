@@ -122,7 +122,7 @@ func (p *pluginManager) Stop(duration time.Duration) error {
 	}
 
 	// wait for the plugins to all finish, or otherwise timeout
-	doneCh := make(chan interface{})
+	doneCh := make(chan struct{})
 	go func() {
 		wg.Wait()
 		doneCh <- struct{}{}

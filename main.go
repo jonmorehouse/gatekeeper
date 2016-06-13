@@ -87,7 +87,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	stopCh := make(chan interface{})
+	stopCh := make(chan struct{})
 	go func() {
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)

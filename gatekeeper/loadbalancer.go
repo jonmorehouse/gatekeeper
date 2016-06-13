@@ -33,7 +33,7 @@ type loadBalancer struct {
 	// internal
 	eventCh  EventCh
 	listenID EventListenerID
-	stopCh   chan interface{}
+	stopCh   chan struct{}
 }
 
 func NewLoadBalancer(broadcaster EventBroadcaster, pluginManager PluginManager) LoadBalancer {
@@ -41,7 +41,7 @@ func NewLoadBalancer(broadcaster EventBroadcaster, pluginManager PluginManager) 
 		broadcaster:   broadcaster,
 		pluginManager: pluginManager,
 		eventCh:       make(EventCh),
-		stopCh:        make(chan interface{}),
+		stopCh:        make(chan struct{}),
 	}
 }
 
@@ -68,7 +68,7 @@ func (l *loadBalancer) Stop(duration time.Duration) error {
 		errs.Add(err)
 	}
 
-	doneCh := make(chan interface{})
+	doneCh := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(2)
 

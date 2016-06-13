@@ -173,7 +173,7 @@ func (c *PluginRPCClient) Start() *shared.Error {
 	// Start a ManagerRPCServer, which will take the impl, passing methods
 	// along to it and ensuring that the correct types are passed around in
 	// response.
-	connectedCh := make(chan interface{})
+	connectedCh := make(chan struct{})
 	go func() {
 		managerRPCServer := ManagerRPCServer{
 			impl:        c.manager,

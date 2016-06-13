@@ -24,7 +24,7 @@ type upstreamRequester struct {
 	broadcaster EventBroadcaster
 	listenID    EventListenerID
 	listenCh    EventCh
-	stopCh      chan interface{}
+	stopCh      chan struct{}
 
 	knownUpstreams      map[shared.UpstreamID]*shared.Upstream
 	upstreamsByHostname map[string]*shared.Upstream
@@ -36,7 +36,7 @@ func NewUpstreamRequester(broadcaster EventBroadcaster) UpstreamRequester {
 	return &upstreamRequester{
 		broadcaster: broadcaster,
 		listenCh:    make(chan Event),
-		stopCh:      make(chan interface{}),
+		stopCh:      make(chan struct{}),
 
 		knownUpstreams:      make(map[shared.UpstreamID]*shared.Upstream),
 		upstreamsByHostname: make(map[string]*shared.Upstream),

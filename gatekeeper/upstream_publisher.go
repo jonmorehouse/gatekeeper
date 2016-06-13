@@ -65,7 +65,7 @@ func (p *UpstreamPublisher) Stop(duration time.Duration) error {
 	errs := NewAsyncMultiError()
 
 	var wg sync.WaitGroup
-	doneCh := make(chan interface{})
+	doneCh := make(chan struct{})
 
 	// stop all pluginManagers, waiting for each one at the end!
 	for _, manager := range p.pluginManagers {

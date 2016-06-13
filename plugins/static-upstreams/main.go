@@ -10,7 +10,7 @@ import (
 
 type StaticUpstreams struct {
 	manager upstream_plugin.Manager
-	stopCh  chan interface{}
+	stopCh  chan struct{}
 }
 
 func (s *StaticUpstreams) Configure(map[string]interface{}) error {
@@ -71,7 +71,7 @@ func (s *StaticUpstreams) worker() {
 
 func main() {
 	staticUpstreams := StaticUpstreams{
-		stopCh: make(chan interface{}),
+		stopCh: make(chan struct{}),
 	}
 
 	if err := upstream_plugin.RunPlugin("static-upstreams", &staticUpstreams); err != nil {
