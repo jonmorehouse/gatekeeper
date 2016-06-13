@@ -44,12 +44,8 @@ echo "building plugin/event package ..."
 cd "$DIR/plugin/event"
 go build .
 
-echo "building plugin/request package ..."
-cd "$DIR/plugin/request"
-go build .
-
-echo "building plugin/response package ..."
-cd "$DIR/plugin/response"
+echo "build plugin/modifier package ..."
+cd "$DIR/plugin/modifier"
 go build .
 
 echo "building gatekeeper package ..."
