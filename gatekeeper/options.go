@@ -24,20 +24,20 @@ type Options struct {
 	LoadBalancerPluginOpts map[string]interface{}
 
 	// name of the plugin binary, expects a full path or the name of a
-	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	RequestPlugins []string
+	// binary in PATH eg: `modifier` or `/home/foo/bin/modifier`
+	ModifierPlugins []string
 	// number of instances to run
-	RequestPluginsCount uint
+	ModifierPluginsCount uint
 	// Opts to be passed along to plugin. Not currently used
-	RequestPluginOpts map[string]interface{}
+	ModifierPluginOpts map[string]interface{}
 
 	// name of the plugin binary, expects a full path or the name of a
-	// binary in PATH eg: `response-modifier` or `/home/foo/bin/response-modifier`
-	ResponsePlugins []string
+	// binary in PATH eg: `event` or `/home/foo/bin/event`
+	EventPlugins []string
 	// number of instances to run
-	ResponsePluginsCount uint
+	EventPluginsCount uint
 	// Opts to be passed along to plugin. Not currently used
-	ResponsePluginOpts map[string]interface{}
+	EventPluginOpts map[string]interface{}
 
 	// Ports to start servers listening on. If not provided, the server
 	// will not be started. If collisions are detected, then this will
@@ -87,17 +87,7 @@ func (o *Options) Validate() error {
 		return fmt.Errorf("LOAD_BALANCER_PLUGIN_COUNT_ZERO")
 	}
 
-	// verify that Request plugins are configured correctly
-	if plugins, err := ValidatePlugins(o.RequestPlugins); err != nil {
-		errs.Add(err)
-	} else {
-		o.RequestPlugins = plugins
-	}
-	if o.RequestPluginsCount == 0 {
-		return fmt.Errorf("REQUEST_PLUGIN_COUNT_ZERO")
-	}
-
-	// verify that Response plugins are configured properly
+	// TODO handle event and modifier plugins
 
 	return errs.ToErr()
 }

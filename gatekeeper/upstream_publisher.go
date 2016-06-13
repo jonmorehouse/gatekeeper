@@ -94,7 +94,7 @@ func (p *UpstreamPublisher) Stop(duration time.Duration) error {
 	}
 }
 
-func (p *UpstreamPublisher) AddUpstream(upstream shared.Upstream) error {
+func (p *UpstreamPublisher) AddUpstream(upstream *shared.Upstream) error {
 	p.Lock()
 	defer p.Unlock()
 	p.knownUpstreams[upstream.ID] = struct{}{}
@@ -127,7 +127,7 @@ func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	return nil
 }
 
-func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) error {
+func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
 	p.Lock()
 	defer p.Unlock()
 	if _, ok := p.knownUpstreams[upstreamID]; !ok {

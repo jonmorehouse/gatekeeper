@@ -43,9 +43,9 @@ type EventBroadcaster interface {
 
 type UpstreamEvent struct {
 	EventType  EventType
-	Upstream   shared.Upstream
+	Upstream   *shared.Upstream
 	UpstreamID shared.UpstreamID
-	Backend    shared.Backend
+	Backend    *shared.Backend
 	BackendID  shared.BackendID
 }
 

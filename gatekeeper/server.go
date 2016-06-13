@@ -22,8 +22,7 @@ type ProxyServer struct {
 	protocol          shared.Protocol
 	upstreamRequester UpstreamRequesterClient
 	loadBalancer      LoadBalancerClient
-	requestModifier   RequestModifierClient
-	responseModifier  ResponseModifierClient
+	modifier          Modifier
 
 	stopAccepting bool
 
@@ -108,7 +107,7 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 		return
 	}
 
-	req, err = s.requestModifier.ModifyRequest(req)
+	req, err = s.modifier.ModifyRequest(req)
 	if err != nil {
 		log.Println(err)
 		io.WriteString(rw, "FAILURE_TO_MODIFY_REQUEST")
@@ -121,7 +120,7 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 
 	// pass the request along to the proxier to perform the request
 	// lifecycle on to the backend.
-	if err := s.proxier.Proxy(rw, rawReq, req, &backend); err != nil {
+	if err := s.proxier.Proxy(rw, rawReq, req, backend); err != nil {
 		io.WriteString(rw, "UNABLE_TO_PROXY")
 		return
 	}

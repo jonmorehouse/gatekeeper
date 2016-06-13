@@ -5,6 +5,7 @@ type Plugin interface {
 	Stop() error
 	Configure(map[string]interface{}) error
 	Heartbeat() error
+	Kill()
 }
 
 type PluginType uint

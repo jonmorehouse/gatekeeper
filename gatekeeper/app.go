@@ -20,8 +20,7 @@ type App struct {
 	broadcaster       EventBroadcaster
 	upstreamPublisher *UpstreamPublisher
 	upstreamRequester UpstreamRequester
-	requestModifier   RequestModifier
-	responseModifier  ResponseModifier
+	modifier          Modifier
 	loadBalancer      LoadBalancer
 }
 
@@ -69,33 +68,22 @@ func New(options Options) (*App, error) {
 	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginOpts, options.LoadBalancerPluginsCount, LoadBalancerPlugin)
 	loadBalancer := NewLoadBalancer(broadcaster, loadBalancerPlugin)
 
-	// for each specified RequestModifier, we create a PluginManager for
-	// that particular instance. The PluginManager manages the lifecycle of
-	// each RequestPlugin
-	requestPlugins := make([]PluginManager, 0, len(options.RequestPlugins))
-	for _, pluginCmd := range options.RequestPlugins {
-		plugin := NewPluginManager(pluginCmd, options.RequestPluginOpts, options.RequestPluginsCount, RequestPlugin)
-		requestPlugins = append(requestPlugins, plugin)
+	// for each specified Modifier plugin, we create a PluginManager which
+	// manages the lifecycle of the plugin.
+	modifierPlugins := make([]PluginManager, 0, len(options.ModifierPlugins))
+	for _, pluginCmd := range options.ModifierPlugins {
+		plugin := NewPluginManager(pluginCmd, options.ModifierPluginOpts, options.ModifierPluginsCount, ModifierPlugin)
+		modifierPlugins = append(modifierPlugins, plugin)
 	}
 
-	// the requestModifier is responsible for modifying requests by calling
-	// the RequestModifier plugins specified
-	requestModifier := NewRequestModifier(requestPlugins)
-
-	// build out PluginManagers for each of the ResponsePlugins specified.
-	responsePlugins := make([]PluginManager, 0, len(options.ResponsePlugins))
-	for _, pluginCmd := range options.ResponsePlugins {
-		plugin := NewPluginManager(pluginCmd, options.ResponsePluginOpts, options.ResponsePluginsCount, ResponsePlugin)
-		responsePlugins = append(responsePlugins, plugin)
-	}
-
-	// the responseModifier is responsible for modifying responses by
-	// calling the ResponseModifier plugins upon callback during a request.
-	responseModifier := NewResponseModifier(responsePlugins)
+	// modifier is a type that wraps a series of modifier plugins and is
+	// used by the Server and Proxier to actually modify requests and
+	// responses
+	modifier := NewModifier(modifierPlugins)
 
 	// Proxier is the naive type which _actually_ handles proxying of
 	// requests out to the backend address.
-	proxier := NewProxier(responseModifier, options.DefaultTimeout)
+	proxier := NewProxier(modifier, options.DefaultTimeout)
 
 	// build out each server type
 	servers := make([]Server, 0, 4)
@@ -106,8 +94,7 @@ func New(options Options) (*App, error) {
 			proxier:           proxier,
 			upstreamRequester: upstreamRequester,
 			loadBalancer:      loadBalancer,
-			requestModifier:   requestModifier,
-			responseModifier:  responseModifier,
+			modifier:          modifier,
 		})
 	}
 
@@ -120,8 +107,7 @@ func New(options Options) (*App, error) {
 		upstreamRequester: upstreamRequester,
 		upstreamPublisher: upstreamPublisher,
 		loadBalancer:      loadBalancer,
-		requestModifier:   requestModifier,
-		responseModifier:  responseModifier,
+		modifier:          modifier,
 		servers:           servers,
 	}, nil
 }
@@ -136,8 +122,7 @@ func (a *App) Start() error {
 		a.upstreamRequester,
 		a.loadBalancer,
 		a.upstreamPublisher,
-		a.requestModifier,
-		a.responseModifier,
+		a.modifier,
 	}
 	for _, job := range syncStart {
 		if err := job.Start(); err != nil {
@@ -189,8 +174,7 @@ func (a *App) Stop(duration time.Duration) error {
 		a.upstreamRequester,
 		a.loadBalancer,
 		a.upstreamPublisher,
-		a.requestModifier,
-		a.responseModifier,
+		a.modifier,
 	}
 	for _, job := range jobs {
 		wg.Add(1)

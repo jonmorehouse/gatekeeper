@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	event_plugin "github.com/jonmorehouse/gatekeeper/plugin/event"
 	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
+	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
@@ -44,7 +46,6 @@ func NewPluginManager(pluginCmd string, opts map[string]interface{}, count uint,
 		opts:       opts,
 		count:      count,
 		instances:  make([]Plugin, 0, count),
-		killers:    make([]func(), 0, count),
 	}
 }
 
@@ -55,7 +56,7 @@ func (p *pluginManager) Start() error {
 
 	for i := uint(0); i < p.count; i++ {
 		wg.Add(1)
-		instance, killer, err := p.buildPlugin()
+		instance, err := p.buildPlugin()
 		if err != nil {
 			errs.Add(err)
 
@@ -64,13 +65,12 @@ func (p *pluginManager) Start() error {
 			// However, if there is a problem starting a plugin,
 			// then we need kill off the plugin before exiting.
 			if instance != nil {
-				killer()
+				instance.Kill()
 			}
 			wg.Done()
 			continue
 		}
 		p.instances = append(p.instances, instance)
-		p.killers = append(p.killers, killer)
 
 		go func(plugin Plugin) {
 			defer wg.Done()
@@ -89,7 +89,7 @@ func (p *pluginManager) Start() error {
 	return errs.ToErr()
 }
 
-func (m pluginManager) buildPlugin() (Plugin, func(), error) {
+func (m pluginManager) buildPlugin() (Plugin, error) {
 	if m.pluginType == UpstreamPlugin {
 		return upstream_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
@@ -103,7 +103,7 @@ func (m pluginManager) buildPlugin() (Plugin, func(), error) {
 		return event_plugin.NewClient(m.pluginName, m.pluginCmd)
 	}
 
-	return nil, nil, fmt.Errorf("INVALID_PLUGIN_TYPE")
+	return nil, fmt.Errorf("INVALID_PLUGIN_TYPE")
 }
 
 func (p *pluginManager) Stop(duration time.Duration) error {

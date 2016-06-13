@@ -26,7 +26,7 @@ type AsyncUpstreamRequester struct {
 	listenCh    EventCh
 	stopCh      chan interface{}
 
-	knownUpstreams      map[shared.UpstreamID]shared.Upstream
+	knownUpstreams      map[shared.UpstreamID]*shared.Upstream
 	upstreamsByHostname map[string]*shared.Upstream
 	upstreamsByPrefix   map[string]*shared.Upstream
 	sync.RWMutex
@@ -38,7 +38,7 @@ func NewAsyncUpstreamRequester(broadcaster EventBroadcaster) UpstreamRequester {
 		listenCh:    make(chan Event),
 		stopCh:      make(chan interface{}),
 
-		knownUpstreams:      make(map[shared.UpstreamID]shared.Upstream),
+		knownUpstreams:      make(map[shared.UpstreamID]*shared.Upstream),
 		upstreamsByHostname: make(map[string]*shared.Upstream),
 		upstreamsByPrefix:   make(map[string]*shared.Upstream),
 	}
@@ -156,12 +156,12 @@ func (r *AsyncUpstreamRequester) UpstreamForRequest(req *shared.Request) (*share
 	// check all knownUpstreams, returning the first match
 	for _, upstream := range r.knownUpstreams {
 		if upstream.HasHostname(hostname) {
-			r.upstreamsByHostname[hostname] = &upstream
-			return &upstream, shared.HostnameMatch, nil
+			r.upstreamsByHostname[hostname] = upstream
+			return upstream, shared.HostnameMatch, nil
 		}
 		if upstream.HasPrefix(prefix) {
-			r.upstreamsByPrefix[prefix] = &upstream
-			return &upstream, shared.PrefixMatch, nil
+			r.upstreamsByPrefix[prefix] = upstream
+			return upstream, shared.PrefixMatch, nil
 		}
 	}
 

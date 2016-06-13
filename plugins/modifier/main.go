@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	request_plugin "github.com/jonmorehouse/gatekeeper/plugin/request"
+	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
@@ -56,7 +56,7 @@ func (Plugin) ModifyResponse(req *shared.Request, resp *shared.Response) (*share
 }
 
 func main() {
-	if err := request_plugin.RunPlugin("request-modifier", &Plugin{}); err != nil {
+	if err := modifier_plugin.RunPlugin("request-modifier", &Plugin{}); err != nil {
 		log.Fatal(err)
 	}
 }

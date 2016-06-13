@@ -17,12 +17,12 @@ import (
 // balancers have all the backends needed
 type LoadBalancer interface {
 	Start() error
-	GetBackend(*shared.Upstream) (shared.Backend, error)
+	GetBackend(*shared.Upstream) (*shared.Backend, error)
 	Stop(time.Duration) error
 }
 
 type LoadBalancerClient interface {
-	GetBackend(*shared.Upstream) (shared.Backend, error)
+	GetBackend(*shared.Upstream) (*shared.Backend, error)
 }
 
 type loadBalancer struct {
@@ -158,21 +158,21 @@ func (l *loadBalancer) handleEvent(event UpstreamEvent) {
 	}
 }
 
-func (l *loadBalancer) GetBackend(upstream *shared.Upstream) (shared.Backend, error) {
+func (l *loadBalancer) GetBackend(upstream *shared.Upstream) (*shared.Backend, error) {
 	plugin, err := l.pluginManager.Get()
 	if err != nil {
-		return shared.NilBackend, err
+		return nil, err
 	}
 
 	// cast this plugin safely to the correct type
 	lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
 	if !ok {
-		return shared.NilBackend, fmt.Errorf("Invalid plugin type; this should not happen")
+		return nil, fmt.Errorf("Invalid plugin type; this should not happen")
 	}
 
 	backend, errPtr := lbPlugin.GetBackend(upstream.ID)
 	if errPtr != nil {
-		return shared.NilBackend, errPtr
+		return nil, errPtr
 	}
 	return backend, nil
 }

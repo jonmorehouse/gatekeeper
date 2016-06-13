@@ -24,7 +24,7 @@ type modifier struct {
 	pluginManagers []PluginManager
 }
 
-func NewRequestModifier(pluginManagers []PluginManager) Modifier {
+func NewModifier(pluginManagers []PluginManager) Modifier {
 	return &modifier{
 		pluginManagers: pluginManagers,
 	}
@@ -86,20 +86,29 @@ func (r *modifier) Stop(duration time.Duration) error {
 	return nil
 }
 
+func (r *modifier) getModifierClient(manager PluginManager) (ModifierClient, error) {
+	rawPlugin, err := manager.Get()
+	if err != nil {
+		return nil, fmt.Errorf("UNABLE_TO_FETCH_MODIFIER_PLUGIN")
+	}
+
+	modifier, ok := rawPlugin.(ModifierClient)
+	if !ok {
+		return nil, fmt.Errorf("UNABLE_TO_CONVERT_PLUGIN_TO_MODIFIER")
+	}
+
+	return modifier, nil
+}
+
 func (r *modifier) ModifyRequest(req *shared.Request) (*shared.Request, error) {
 	var err error
 	for _, pluginManager := range r.pluginManagers {
-		plugin, err := pluginManager.Get()
+		modifier, err := r.getModifierClient(pluginManager)
 		if err != nil {
-			return req, fmt.Errorf("UNABLE_TO_FETCH_REQUEST_MODIFIER")
+			return req, err
 		}
 
-		requestPlugin, ok := plugin.(request_plugin.PluginRPC)
-		if !ok {
-			return req, fmt.Errorf("INVALID_REQUEST_PLUGIN_TYPE")
-		}
-
-		req, err = requestPlugin.ModifyRequest(req)
+		req, err = modifier.ModifyRequest(req)
 		if err != nil {
 			break
 		}
@@ -112,17 +121,12 @@ func (r *modifier) ModifyResponse(req *shared.Request, resp *shared.Response) (*
 	var err error
 
 	for _, pluginManager := range r.pluginManagers {
-		plugin, err := pluginManager.Get()
+		modifier, err := r.getModifierClient(pluginManager)
 		if err != nil {
-			return resp, fmt.Errorf("Unable to get response modifier plugin")
+			return resp, err
 		}
 
-		responsePlugin, ok := plugin.(response_plugin.PluginRPC)
-		if !ok {
-			return resp, fmt.Errorf("INVALID_RESPONSE_PLUGIN_TYPE")
-		}
-
-		resp, err = responsePlugin.ModifyResponse(req, resp)
+		resp, err = modifier.ModifyResponse(req, resp)
 		if err != nil {
 			break
 		}
