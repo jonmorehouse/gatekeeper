@@ -65,19 +65,19 @@ func NewPluginClient(pluginRPC PluginRPC, client *plugin.Client) PluginClient {
 }
 
 func (p *pluginClient) Start() error {
-	return p.pluginRPC.Start()
+	return shared.ErrorToError(p.pluginRPC.Start())
 }
 
 func (p *pluginClient) Stop() error {
-	return p.pluginRPC.Stop()
+	return shared.ErrorToError(p.pluginRPC.Stop())
 }
 
 func (p *pluginClient) Configure(opts map[string]interface{}) error {
-	return p.pluginRPC.Configure(opts)
+	return shared.ErrorToError(p.pluginRPC.Configure(opts))
 }
 
 func (p *pluginClient) Heartbeat() error {
-	return p.pluginRPC.Heartbeat()
+	return shared.ErrorToError(p.pluginRPC.Heartbeat())
 }
 
 func (p *pluginClient) Kill() {
@@ -85,15 +85,16 @@ func (p *pluginClient) Kill() {
 }
 
 func (p *pluginClient) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
-	return p.pluginRPC.AddBackend(upstreamID, backend)
+	return shared.ErrorToError(p.pluginRPC.AddBackend(upstreamID, backend))
 }
 
 func (p *pluginClient) RemoveBackend(backend *shared.Backend) error {
-	return p.pluginRPC.RemoveBackend(backend)
+	return shared.ErrorToError(p.pluginRPC.RemoveBackend(backend))
 }
 
 func (p *pluginClient) GetBackend(upstreamID shared.UpstreamID) (*shared.Backend, error) {
-	return p.pluginRPC.GetBackend(upstreamID)
+	backend, err := p.pluginRPC.GetBackend(upstreamID)
+	return backend, shared.ErrorToError(err)
 }
 
 // PluginRPC is an RPC compatible interface that exposes the Plugin interface

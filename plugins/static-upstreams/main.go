@@ -44,7 +44,7 @@ func (s *StaticUpstreams) worker() {
 	}
 	err := s.manager.AddUpstream(upstream)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Static upstreams plugin was unable to emit an upstream...", err)
 	}
 
 	backend := &shared.Backend{
@@ -54,8 +54,7 @@ func (s *StaticUpstreams) worker() {
 
 	err = s.manager.AddBackend(upstream.ID, backend)
 	if err != nil {
-		log.Println("Static upstreams plugin was unable to emit a backend")
-		log.Println(err)
+		log.Println("Static upstreams plugin was unable to emit a backend...", err)
 	}
 
 	// block in this background worker until a stop signal is triggered by

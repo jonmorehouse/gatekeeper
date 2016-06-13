@@ -33,8 +33,11 @@ func (l *LoadBalancer) Stop() error {
 	log.Println("simple-loadbalancer plugin stopped...")
 	return nil
 }
-func (l *LoadBalancer) Configure(opts map[string]interface{}) error { return nil }
-func (l *LoadBalancer) Heartbeat() error                            { return nil }
+func (l *LoadBalancer) Configure(opts map[string]interface{}) error {
+	log.Println("configuring simple-loadbalancer ...")
+	return nil
+}
+func (l *LoadBalancer) Heartbeat() error { return nil }
 
 // actual implementation of methods used
 func (l *LoadBalancer) AddBackend(upstream shared.UpstreamID, backend *shared.Backend) error {

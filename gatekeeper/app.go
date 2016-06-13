@@ -2,6 +2,7 @@ package gatekeeper
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -125,6 +126,10 @@ func (a *App) Start() error {
 		a.modifier,
 	}
 	for _, job := range syncStart {
+		if job == nil {
+			log.Fatal("Misconfigured application")
+		}
+
 		if err := job.Start(); err != nil {
 			return err
 		}

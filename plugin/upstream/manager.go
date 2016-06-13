@@ -34,17 +34,17 @@ type ManagerClient struct {
 }
 
 func (m *ManagerClient) AddUpstream(upstream *shared.Upstream) error {
-	return m.ManagerRPC.AddUpstream(upstream)
+	return shared.ErrorToError(m.ManagerRPC.AddUpstream(upstream))
 }
 
 func (m *ManagerClient) RemoveUpstream(upstreamID shared.UpstreamID) error {
-	return m.ManagerRPC.RemoveUpstream(upstreamID)
+	return shared.ErrorToError(m.ManagerRPC.RemoveUpstream(upstreamID))
 }
 
 func (m *ManagerClient) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
-	return m.ManagerRPC.AddBackend(upstreamID, backend)
+	return shared.ErrorToError(m.ManagerRPC.AddBackend(upstreamID, backend))
 }
 
 func (m *ManagerClient) RemoveBackend(backendID shared.BackendID) error {
-	return m.ManagerRPC.RemoveBackend(backendID)
+	return shared.ErrorToError(m.ManagerRPC.RemoveBackend(backendID))
 }

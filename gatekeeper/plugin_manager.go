@@ -118,8 +118,6 @@ func (p *pluginManager) Stop(duration time.Duration) error {
 				errs.Add(err)
 			}
 
-			// stop the plugin client
-
 			wg.Done()
 		}(instance)
 	}

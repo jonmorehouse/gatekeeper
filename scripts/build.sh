@@ -37,7 +37,7 @@ cd "$DIR/plugin/upstream"
 go build .
 
 echo "building plugin/loadbalancer package ..."
-cd "$DIR/plugin/upstream"
+cd "$DIR/plugin/loadbalancer"
 go build .
 
 echo "building plugin/event package ..."
@@ -48,7 +48,7 @@ echo "build plugin/modifier package ..."
 cd "$DIR/plugin/modifier"
 go build .
 
-echo "building gatekeeper package ..."
+echo "building gatekeeper core package ..."
 cd "$DIR/gatekeeper"
 go build .
 

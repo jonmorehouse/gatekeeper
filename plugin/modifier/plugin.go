@@ -62,19 +62,19 @@ func NewPluginClient(client *plugin.Client, pluginRPC PluginRPC) PluginClient {
 }
 
 func (p *pluginClient) Configure(opts map[string]interface{}) error {
-	return p.pluginRPC.Configure(opts)
+	return shared.ErrorToError(p.pluginRPC.Configure(opts))
 }
 
 func (p *pluginClient) Heartbeat() error {
-	return p.pluginRPC.Heartbeat()
+	return shared.ErrorToError(p.pluginRPC.Heartbeat())
 }
 
 func (p *pluginClient) Start() error {
-	return p.pluginRPC.Start()
+	return shared.ErrorToError(p.pluginRPC.Start())
 }
 
 func (p *pluginClient) Stop() error {
-	return p.pluginRPC.Stop()
+	return shared.ErrorToError(p.pluginRPC.Stop())
 }
 
 func (p *pluginClient) Kill() {
@@ -82,11 +82,13 @@ func (p *pluginClient) Kill() {
 }
 
 func (p *pluginClient) ModifyRequest(req *shared.Request) (*shared.Request, error) {
-	return p.pluginRPC.ModifyRequest(req)
+	req, err := p.pluginRPC.ModifyRequest(req)
+	return req, shared.ErrorToError(err)
 }
 
 func (p *pluginClient) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
-	return p.pluginRPC.ModifyResponse(req, resp)
+	resp, err := p.pluginRPC.ModifyResponse(req, resp)
+	return resp, shared.ErrorToError(err)
 }
 
 // this is the PluginRPC type that we actually implement as the "plugin"

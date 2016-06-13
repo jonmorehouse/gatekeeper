@@ -14,22 +14,22 @@ type Plugin struct {
 }
 
 func (*Plugin) Configure(args map[string]interface{}) error {
-	log.Println("configuring request modifier plugin")
+	log.Println("configuring modifier plugin")
 	return nil
 }
 
 func (*Plugin) Heartbeat() error {
-	log.Println("request-modifier plugin heartbeat")
+	log.Println("modifier plugin heartbeat")
 	return nil
 }
 
 func (*Plugin) Start() error {
-	log.Println("calling Start() on request-modifier plugin")
+	log.Println("calling Start() on modifier plugin")
 	return nil
 }
 
 func (*Plugin) Stop() error {
-	log.Println("calling Stop() on request-modifier plugin")
+	log.Println("calling Stop() on modifier plugin")
 	return nil
 }
 
@@ -56,7 +56,7 @@ func (Plugin) ModifyResponse(req *shared.Request, resp *shared.Response) (*share
 }
 
 func main() {
-	if err := modifier_plugin.RunPlugin("request-modifier", &Plugin{}); err != nil {
+	if err := modifier_plugin.RunPlugin("modifier", &Plugin{}); err != nil {
 		log.Fatal(err)
 	}
 }
