@@ -40,9 +40,22 @@ echo "building plugin/loadbalancer package ..."
 cd "$DIR/plugin/upstream"
 go build .
 
+echo "building plugin/event package ..."
+cd "$DIR/plugin/event"
+go build .
+
+echo "building plugin/request package ..."
+cd "$DIR/plugin/request"
+go build .
+
+echo "building plugin/response package ..."
+cd "$DIR/plugin/response"
+go build .
+
 echo "building gatekeeper package ..."
 cd "$DIR/gatekeeper"
 go build .
+
 
 # 
 # Build the main gatekeeper application
