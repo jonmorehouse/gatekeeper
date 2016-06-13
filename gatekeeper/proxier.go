@@ -20,17 +20,17 @@ type Proxier interface {
 type proxier struct {
 	defaultTimeout time.Duration
 
-	responseModifier ResponseModifier
+	modifier Modifier
 	sync.RWMutex
 
 	requests map[*http.Request]*shared.Request
 }
 
-func NewProxier(responseModifier ResponseModifier, defaultTimeout time.Duration) Proxier {
+func NewProxier(modifier Modifier, defaultTimeout time.Duration) Proxier {
 	return &proxier{
-		defaultTimeout:   defaultTimeout,
-		responseModifier: responseModifier,
-		requests:         make(map[*http.Request]*shared.Request),
+		defaultTimeout: defaultTimeout,
+		modifier:       modifier,
+		requests:       make(map[*http.Request]*shared.Request),
 	}
 }
 
@@ -143,10 +143,10 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 	}
 
 	resp := shared.NewResponse(rawResp)
-	// modify the response using our responseModifier and then map the
+	// modify the response using our modifier and then map the
 	// response back to an _actual_ http.Response to be sent back to the
 	// client.
-	resp, err = p.responseModifier.ModifyResponse(request, resp)
+	resp, err = p.modifier.ModifyResponse(request, resp)
 	if err != nil {
 		return rawResp, err
 	}

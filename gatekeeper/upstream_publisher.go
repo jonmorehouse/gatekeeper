@@ -8,7 +8,6 @@ import (
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-// TODO come up with a better sort of Stop/Start interface here?
 type Publisher interface {
 	Start() error
 	Stop(time.Duration) error
@@ -95,7 +94,7 @@ func (p *UpstreamPublisher) Stop(duration time.Duration) error {
 	}
 }
 
-func (p *UpstreamPublisher) AddUpstream(upstream shared.Upstream) error {
+func (p *UpstreamPublisher) AddUpstream(upstream *shared.Upstream) error {
 	p.Lock()
 	defer p.Unlock()
 	p.knownUpstreams[upstream.ID] = struct{}{}
@@ -128,7 +127,7 @@ func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	return nil
 }
 
-func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) error {
+func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
 	p.Lock()
 	defer p.Unlock()
 	if _, ok := p.knownUpstreams[upstreamID]; !ok {
@@ -161,26 +160,4 @@ func (p *UpstreamPublisher) RemoveBackend(backendID shared.BackendID) error {
 		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
 	}
 	return nil
-}
-
-// this is a small type that implements the upstream_plugin.Manager interface
-// by wrapping an upstream publisher.
-type RPCUpstreamPublisher struct {
-	publisher *UpstreamPublisher
-}
-
-func (p *RPCUpstreamPublisher) AddUpstream(u shared.Upstream) *shared.Error {
-	return shared.NewError(p.publisher.AddUpstream(u))
-}
-
-func (p *RPCUpstreamPublisher) RemoveUpstream(uID shared.UpstreamID) *shared.Error {
-	return shared.NewError(p.publisher.RemoveUpstream(uID))
-}
-
-func (p *RPCUpstreamPublisher) AddBackend(uID shared.UpstreamID, backend shared.Backend) *shared.Error {
-	return shared.NewError(p.publisher.AddBackend(uID, backend))
-}
-
-func (p *RPCUpstreamPublisher) RemoveBackend(bID shared.BackendID) *shared.Error {
-	return shared.NewError(p.publisher.RemoveBackend(bID))
 }

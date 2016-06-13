@@ -31,17 +31,15 @@ func main() {
 	flag.UintVar(&options.LoadBalancerPluginsCount, "loadbalancer-plugins-count", 1, "number of instances of each loadbalancer plugin to operate")
 	loadBalancerPluginOpts := flag.String("loadbalancer-plugins-opts", "{}", "json encoded options to be passed to each loadbalancer plugin")
 
-	// RequestPlugin configuration
-	requestPlugins := flag.String("request-plugins", "request-modifier", "comma delimited list of request plugin executables")
-	flag.UintVar(&options.RequestPluginsCount, "request-plugins-count", 1, "number of instances of each request plugin to operate")
-	requestPluginOpts := flag.String("request-plugins-opts", "{}", "json encoded options to be passed to each request plugin")
+	// eventPlugin configuration
+	eventPlugins := flag.String("event-plugins", "event-logger", "comma delimited list of event plugin executables. default: event-logger")
+	flag.UintVar(&options.EventPluginsCount, "event-plugins-count", 1, "number of instances of each event plugin to operate")
+	eventPluginOpts := flag.String("event-plugins-opts", "{}", "json encoded options to be passed to each event plugin")
 
-	// ResponsePlugin configuration
-	responsePlugins := flag.String("response-plugins", "response-modifier", "comma delimited list of response plugin executables")
-	flag.UintVar(&options.ResponsePluginsCount, "response-plugins-count", 1, "number of instances of each response plugin to operate")
-	responsePluginOpts := flag.String("response-plugins-opts", "{}", "json encoded options to be passed to each response plugin")
-
-	// TODO EventPlugin options
+	// modifierPlugin configuration
+	modifierPlugins := flag.String("modifier-plugins", "modifier", "comma delimited list of modifier plugin executables. default: modifier")
+	flag.UintVar(&options.ModifierPluginsCount, "modifier-plugins-count", 1, "number of instances of each modifier plugin to operate")
+	modifierPluginOpts := flag.String("modifier-plugins-opts", "{}", "json encoded options to be passed to each modifier plugin")
 
 	// Configure Listen Ports for different protocols
 	flag.UintVar(&options.HTTPPublicPort, "http-public-port", 8000, "listen port for http-public traffic. default: 8000")
@@ -61,21 +59,21 @@ func main() {
 		log.Fatal("Invalid JSON for upstream-plugin-opts")
 	}
 
-	// validate load balancer plugin options
+	// validate load balancer plugin configuration
 	options.LoadBalancerPluginOpts, err = parseJSONOpts(*loadBalancerPluginOpts)
 	if err != nil {
 		log.Fatal("Invalid JSON for loadbalancer-plugin-opts")
 	}
 
-	// validate request plugin options
-	options.RequestPlugins = strings.Split(*requestPlugins, ",")
-	options.RequestPluginOpts, err = parseJSONOpts(*requestPluginOpts)
+	// validate event plugin configuration
+	options.EventPlugins = strings.Split(*eventPlugins, ",")
+	options.EventPluginOpts, err = parseJSONOpts(*eventPluginOpts)
 	if err != nil {
-		log.Fatal("Invalid JSON for request-plugin-opts")
+		log.Fatal("Invalid JSON for event-plugin-opts")
 	}
 
-	options.ResponsePlugins = strings.Split(*responsePlugins, ",")
-	options.ResponsePluginOpts, err = parseJSONOpts(*responsePluginOpts)
+	options.ModifierPlugins = strings.Split(*modifierPlugins, ",")
+	options.ModifierPluginOpts, err = parseJSONOpts(*modifierPluginOpts)
 	if err != nil {
 		log.Fatal("Invalid JSON for response-plugin-opts")
 	}

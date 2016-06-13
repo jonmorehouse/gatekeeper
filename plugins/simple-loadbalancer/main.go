@@ -15,39 +15,43 @@ import (
 type LoadBalancer struct {
 	sync.RWMutex
 
-	upstreamBackends map[shared.UpstreamID][]shared.Backend
+	upstreamBackends map[shared.UpstreamID][]*shared.Backend
 }
 
 func NewLoadBalancer() *LoadBalancer {
 	return &LoadBalancer{
-		upstreamBackends: make(map[shared.UpstreamID][]shared.Backend),
+		upstreamBackends: make(map[shared.UpstreamID][]*shared.Backend),
 	}
 }
 
 // no special configuration needed, but we implement these methods anyway for the interface
-func (l *LoadBalancer) Start() *shared.Error {
+func (l *LoadBalancer) Start() error {
 	log.Println("simple-loadbalancer plugin started...")
 	return nil
 }
-func (l *LoadBalancer) Stop() *shared.Error {
+func (l *LoadBalancer) Stop() error {
 	log.Println("simple-loadbalancer plugin stopped...")
 	return nil
 }
-func (l *LoadBalancer) Configure(opts map[string]interface{}) *shared.Error { return nil }
-func (l *LoadBalancer) Heartbeat() *shared.Error                            { return nil }
+func (l *LoadBalancer) Configure(opts map[string]interface{}) error {
+	log.Println("configuring simple-loadbalancer ...")
+	return nil
+}
+func (l *LoadBalancer) Heartbeat() error { return nil }
 
 // actual implementation of methods used
-func (l *LoadBalancer) AddBackend(upstream shared.UpstreamID, backend shared.Backend) *shared.Error {
+func (l *LoadBalancer) AddBackend(upstream shared.UpstreamID, backend *shared.Backend) error {
 	log.Println(upstream, backend)
+
 	// TODO: handle duplicate backends here
 	if _, ok := l.upstreamBackends[upstream]; !ok {
-		l.upstreamBackends[upstream] = make([]shared.Backend, 0, 1)
+		l.upstreamBackends[upstream] = make([]*shared.Backend, 0, 1)
 	}
 	l.upstreamBackends[upstream] = append(l.upstreamBackends[upstream], backend)
 	return nil
 }
 
-func (l *LoadBalancer) RemoveBackend(deleted shared.Backend) *shared.Error {
+func (l *LoadBalancer) RemoveBackend(deleted *shared.Backend) error {
 	found := false
 
 	for upstream, backends := range l.upstreamBackends {
@@ -64,17 +68,17 @@ func (l *LoadBalancer) RemoveBackend(deleted shared.Backend) *shared.Error {
 	}
 
 	if !found {
-		return shared.NewError(fmt.Errorf("Did not find backend"))
+		return fmt.Errorf("Did not find backend")
 	}
 	return nil
 }
 
-func (l *LoadBalancer) GetBackend(upstream shared.UpstreamID) (shared.Backend, *shared.Error) {
+func (l *LoadBalancer) GetBackend(upstream shared.UpstreamID) (*shared.Backend, error) {
 	backends, found := l.upstreamBackends[upstream]
 	if !found {
-		return shared.NilBackend, shared.NewError(fmt.Errorf("UPSTREAM_NOT_FOUND"))
+		return nil, fmt.Errorf("UPSTREAM_NOT_FOUND")
 	} else if len(backends) == 0 {
-		return shared.NilBackend, shared.NewError(fmt.Errorf("NO_BACKENDS_FOUND"))
+		return nil, fmt.Errorf("NO_BACKENDS_FOUND")
 	}
 
 	// pick a random backend for this upstream and return it

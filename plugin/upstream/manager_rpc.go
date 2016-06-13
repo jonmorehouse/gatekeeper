@@ -10,7 +10,7 @@ type NotifyArgs struct{}
 type NotifyResp struct{}
 
 type AddUpstreamArgs struct {
-	Upstream shared.Upstream
+	Upstream *shared.Upstream
 }
 
 type AddUpstreamResp struct {
@@ -27,7 +27,7 @@ type RemoveUpstreamResp struct {
 
 type AddBackendArgs struct {
 	UpstreamID shared.UpstreamID
-	Backend    shared.Backend
+	Backend    *shared.Backend
 }
 
 type AddBackendResp struct {
@@ -66,7 +66,7 @@ func (c *ManagerRPCClient) Heartbeat() *shared.Error {
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddUpstream(upstream shared.Upstream) *shared.Error {
+func (c *ManagerRPCClient) AddUpstream(upstream *shared.Upstream) *shared.Error {
 	callArgs := AddUpstreamArgs{
 		Upstream: upstream,
 	}
@@ -91,7 +91,7 @@ func (c *ManagerRPCClient) RemoveUpstream(upstreamID shared.UpstreamID) *shared.
 	return callResp.Err
 }
 
-func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend shared.Backend) *shared.Error {
+func (c *ManagerRPCClient) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) *shared.Error {
 	callArgs := AddBackendArgs{
 		UpstreamID: upstreamID,
 		Backend:    backend,
@@ -132,24 +132,24 @@ func (s *ManagerRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) e
 
 func (s *ManagerRPCServer) AddUpstream(args *AddUpstreamArgs, resp *AddUpstreamResp) error {
 	err := s.impl.AddUpstream(args.Upstream)
-	resp.Err = err
+	resp.Err = shared.NewError(err)
 	return nil
 }
 
 func (s *ManagerRPCServer) RemoveUpstream(args *RemoveUpstreamArgs, resp *RemoveUpstreamResp) error {
 	err := s.impl.RemoveUpstream(args.UpstreamID)
-	resp.Err = err
+	resp.Err = shared.NewError(err)
 	return nil
 }
 
 func (s *ManagerRPCServer) AddBackend(args *AddBackendArgs, resp *AddBackendResp) error {
 	err := s.impl.AddBackend(args.UpstreamID, args.Backend)
-	resp.Err = err
+	resp.Err = shared.NewError(err)
 	return nil
 }
 
 func (s *ManagerRPCServer) RemoveBackend(args *RemoveBackendArgs, resp *RemoveBackendResp) error {
 	err := s.impl.RemoveBackend(args.BackendID)
-	resp.Err = err
+	resp.Err = shared.NewError(err)
 	return nil
 }

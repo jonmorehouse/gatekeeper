@@ -1,14 +1,11 @@
 package gatekeeper
 
-import (
-	"github.com/jonmorehouse/gatekeeper/shared"
-)
-
 type Plugin interface {
-	Start() *shared.Error
-	Stop() *shared.Error
-	Configure(map[string]interface{}) *shared.Error
-	Heartbeat() *shared.Error
+	Start() error
+	Stop() error
+	Configure(map[string]interface{}) error
+	Heartbeat() error
+	Kill()
 }
 
 type PluginType uint
@@ -16,9 +13,6 @@ type PluginType uint
 const (
 	UpstreamPlugin PluginType = iota + 1
 	LoadBalancerPlugin
-	RequestPlugin
-	ResponsePlugin
-
-	// ResponsePlugin
-	ProxyPlugin
+	ModifierPlugin
+	EventPlugin
 )

@@ -1,6 +1,7 @@
 package loadbalancer
 
 import (
+	"fmt"
 	"net/rpc"
 	"os/exec"
 
@@ -14,23 +15,99 @@ var Handshake = plugin.HandshakeConfig{
 	MagicCookieValue: "loadbalancer",
 }
 
-type Opts map[string]interface{}
-
-// this is the interface that gatekeeper sees
+// Plugin is the interface which individual plugins implement and pass into the
+// Plugin interface. This package is responsible for building the scaffolding
+// around exposing the interface over RPC so that parent processes can talk to
+// the LoadBalancer plugin as needed.
 type Plugin interface {
-	// standard plugin methods
+	Start() error
+	Stop() error
+	Configure(map[string]interface{}) error
+	Heartbeat() error
+
+	AddBackend(shared.UpstreamID, *shared.Backend) error
+	RemoveBackend(*shared.Backend) error
+	GetBackend(shared.UpstreamID) (*shared.Backend, error)
+}
+
+// PluginClient is the interface which users of the
+// loadbalancer_plugin.NewClient are exposed to. Specifically, this wraps a
+// PluginRPC type and a plugin.Client allowing us to transparently make calls
+// over RPC to the Plugin interface, as well as gives us the ability to kill
+// the underlying connection to the plugin process.
+type PluginClient interface {
+	Configure(map[string]interface{}) error
+	Heartbeat() error
+	Start() error
+	Stop() error
+
+	// kill the underlying RPC connection, this should normally be a NOOP
+	// under the hood, but in the case of a plugin Stop() timing out, we
+	// can ensure that no ghost processes are left behind.
+	Kill()
+
+	AddBackend(shared.UpstreamID, *shared.Backend) error
+	RemoveBackend(*shared.Backend) error
+	GetBackend(shared.UpstreamID) (*shared.Backend, error)
+}
+
+// pluginClient implements the PluginClient interface, wrapping a PluginRPC and plugin.Client connection
+type pluginClient struct {
+	pluginRPC PluginRPC
+	client    *plugin.Client
+}
+
+func NewPluginClient(pluginRPC PluginRPC, client *plugin.Client) PluginClient {
+	return &pluginClient{
+		pluginRPC: pluginRPC,
+		client:    client,
+	}
+}
+
+func (p *pluginClient) Start() error {
+	return shared.ErrorToError(p.pluginRPC.Start())
+}
+
+func (p *pluginClient) Stop() error {
+	return shared.ErrorToError(p.pluginRPC.Stop())
+}
+
+func (p *pluginClient) Configure(opts map[string]interface{}) error {
+	return shared.ErrorToError(p.pluginRPC.Configure(opts))
+}
+
+func (p *pluginClient) Heartbeat() error {
+	return shared.ErrorToError(p.pluginRPC.Heartbeat())
+}
+
+func (p *pluginClient) Kill() {
+	p.client.Kill()
+}
+
+func (p *pluginClient) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
+	return shared.ErrorToError(p.pluginRPC.AddBackend(upstreamID, backend))
+}
+
+func (p *pluginClient) RemoveBackend(backend *shared.Backend) error {
+	return shared.ErrorToError(p.pluginRPC.RemoveBackend(backend))
+}
+
+func (p *pluginClient) GetBackend(upstreamID shared.UpstreamID) (*shared.Backend, error) {
+	backend, err := p.pluginRPC.GetBackend(upstreamID)
+	return backend, shared.ErrorToError(err)
+}
+
+// PluginRPC is an RPC compatible interface that exposes the Plugin interface
+// in an RPC safe way.
+type PluginRPC interface {
 	Start() *shared.Error
 	Stop() *shared.Error
-	// this isn't Opts, because we want to make this as general as possible
-	// for expressiveness between different plugins
 	Configure(map[string]interface{}) *shared.Error
-	// Heartbeat is called by a plugin manager in the primary application periodically
 	Heartbeat() *shared.Error
 
-	// loadbalancer specific methods
-	AddBackend(shared.UpstreamID, shared.Backend) *shared.Error
-	RemoveBackend(shared.Backend) *shared.Error
-	GetBackend(shared.UpstreamID) (shared.Backend, *shared.Error)
+	AddBackend(shared.UpstreamID, *shared.Backend) *shared.Error
+	RemoveBackend(*shared.Backend) *shared.Error
+	GetBackend(shared.UpstreamID) (*shared.Backend, *shared.Error)
 }
 
 type PluginDispenser struct {
@@ -62,7 +139,7 @@ func RunPlugin(name string, impl Plugin) error {
 	return nil
 }
 
-func NewClient(name string, cmd string) (Plugin, func(), error) {
+func NewClient(name string, cmd string) (PluginClient, error) {
 	pluginDispenser := PluginDispenser{}
 
 	client := plugin.NewClient(&plugin.ClientConfig{
@@ -76,14 +153,20 @@ func NewClient(name string, cmd string) (Plugin, func(), error) {
 	rpcClient, err := client.Client()
 	if err != nil {
 		client.Kill()
-		return nil, func() {}, err
+		return nil, err
 	}
 
 	rawPlugin, err := rpcClient.Dispense(name)
 	if err != nil {
 		client.Kill()
-		return nil, func() {}, err
+		return nil, err
 	}
 
-	return rawPlugin.(Plugin), func() { client.Kill() }, nil
+	pluginRPC, ok := rawPlugin.(PluginRPC)
+	if !ok {
+		client.Kill()
+		return nil, fmt.Errorf("Unable to cast dispensed plugin to a PluginRPC type")
+	}
+
+	return NewPluginClient(pluginRPC, client), nil
 }
