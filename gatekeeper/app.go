@@ -18,6 +18,7 @@ type App struct {
 	// the server type adheres to the startStop interface, by convenience.
 	servers []Server
 
+	metricWriter      MetricWriter
 	broadcaster       EventBroadcaster
 	upstreamPublisher *UpstreamPublisher
 	upstreamRequester UpstreamRequester
@@ -29,6 +30,16 @@ func New(options Options) (*App, error) {
 	if err := options.Validate(); err != nil {
 		return nil, err
 	}
+
+	// MetricWriter is a wrapper around a series of Event plugins which is
+	// used by various processes around teh application to emit metrics and
+	// erros to the Event plugin
+	eventPlugins := make([]PluginManager, 0, len(options.EventPlugins))
+	for _, pluginCmd := range options.EventPlugins {
+		plugin := NewPluginManager(pluginCmd, options.EventPluginOpts, options.EventPluginsCount, EventPlugin)
+		eventPlugins = append(eventPlugins, plugin)
+	}
+	metricWriter := NewMetricWriter(eventPlugins)
 
 	// the broadcaster is what glues everything together. It is responsible
 	// for dispensing events throughout the server so that plugins can
@@ -104,6 +115,7 @@ func New(options Options) (*App, error) {
 	}
 
 	return &App{
+		metricWriter:      metricWriter,
 		broadcaster:       broadcaster,
 		upstreamRequester: upstreamRequester,
 		upstreamPublisher: upstreamPublisher,
@@ -120,6 +132,7 @@ func (a *App) Start() error {
 	// server at any time is supported. eg: if a plugin emits
 	// upstreams/backends at start time and never again.
 	syncStart := []startStop{
+		a.metricWriter,
 		a.upstreamRequester,
 		a.loadBalancer,
 		a.upstreamPublisher,
@@ -180,6 +193,7 @@ func (a *App) Stop(duration time.Duration) error {
 		a.loadBalancer,
 		a.upstreamPublisher,
 		a.modifier,
+		a.metricWriter,
 	}
 	for _, job := range jobs {
 		wg.Add(1)

@@ -77,19 +77,19 @@ func NewPluginClient(client *plugin.Client, pluginRPC PluginRPC) PluginClient {
 }
 
 func (p *pluginClient) Configure(opts map[string]interface{}) error {
-	return p.pluginRPC.Configure(opts)
+	return shared.ErrorToError(p.pluginRPC.Configure(opts))
 }
 
 func (p *pluginClient) Heartbeat() error {
-	return p.pluginRPC.Heartbeat()
+	return shared.ErrorToError(p.pluginRPC.Heartbeat())
 }
 
 func (p *pluginClient) Start() error {
-	return p.pluginRPC.Start()
+	return shared.ErrorToError(p.pluginRPC.Start())
 }
 
 func (p *pluginClient) Stop() error {
-	return p.pluginRPC.Stop()
+	return shared.ErrorToError(p.pluginRPC.Stop())
 }
 
 func (p *pluginClient) Kill() {
@@ -97,9 +97,16 @@ func (p *pluginClient) Kill() {
 }
 
 func sharedErrsToErrs(input []*shared.Error) []error {
+	if len(input) == 0 {
+		return nil
+	}
+
 	errs := make([]error, 0, len(input))
-	for _, err := range input {
-		errs = append(errs, err)
+	for _, sharedErr := range input {
+		err := shared.ErrorToError(sharedErr)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	return errs

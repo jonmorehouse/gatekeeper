@@ -35,7 +35,6 @@ type pluginManager struct {
 	// count is the number of instances that this manager should manage for this plugin
 	count     uint
 	instances []Plugin
-	killers   []func()
 }
 
 func NewPluginManager(pluginCmd string, opts map[string]interface{}, count uint, pluginType PluginType) PluginManager {
@@ -141,11 +140,7 @@ func (p *pluginManager) Stop(duration time.Duration) error {
 	}
 
 cleanup:
-	// call all kill functions for all plugin clients, ensuring that we
-	// shut down any loose rpc connections
-	for _, killer := range p.killers {
-		killer()
-	}
+	// cleanup ...
 	return errs.ToErr()
 }
 
