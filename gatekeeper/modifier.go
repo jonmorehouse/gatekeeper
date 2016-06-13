@@ -5,31 +5,32 @@ import (
 	"sync"
 	"time"
 
-	request_plugin "github.com/jonmorehouse/gatekeeper/plugin/request"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-type RequestModifier interface {
+type Modifier interface {
 	Start() error
 	Stop(time.Duration) error
 	ModifyRequest(*shared.Request) (*shared.Request, error)
+	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
 }
 
-type RequestModifierClient interface {
+type ModifierClient interface {
 	ModifyRequest(*shared.Request) (*shared.Request, error)
+	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
 }
 
-type requestModifier struct {
+type modifier struct {
 	pluginManagers []PluginManager
 }
 
-func NewRequestModifier(pluginManagers []PluginManager) RequestModifier {
-	return &requestModifier{
+func NewRequestModifier(pluginManagers []PluginManager) Modifier {
+	return &modifier{
 		pluginManagers: pluginManagers,
 	}
 }
 
-func (r *requestModifier) Start() error {
+func (r *modifier) Start() error {
 	errs := NewAsyncMultiError()
 
 	var wg sync.WaitGroup
@@ -50,7 +51,7 @@ func (r *requestModifier) Start() error {
 	return errs.ToErr()
 }
 
-func (r *requestModifier) Stop(duration time.Duration) error {
+func (r *modifier) Stop(duration time.Duration) error {
 	errs := NewAsyncMultiError()
 
 	var wg sync.WaitGroup
@@ -85,7 +86,7 @@ func (r *requestModifier) Stop(duration time.Duration) error {
 	return nil
 }
 
-func (r *requestModifier) ModifyRequest(req *shared.Request) (*shared.Request, error) {
+func (r *modifier) ModifyRequest(req *shared.Request) (*shared.Request, error) {
 	var err error
 	for _, pluginManager := range r.pluginManagers {
 		plugin, err := pluginManager.Get()
@@ -105,4 +106,27 @@ func (r *requestModifier) ModifyRequest(req *shared.Request) (*shared.Request, e
 	}
 
 	return req, err
+}
+
+func (r *modifier) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
+	var err error
+
+	for _, pluginManager := range r.pluginManagers {
+		plugin, err := pluginManager.Get()
+		if err != nil {
+			return resp, fmt.Errorf("Unable to get response modifier plugin")
+		}
+
+		responsePlugin, ok := plugin.(response_plugin.PluginRPC)
+		if !ok {
+			return resp, fmt.Errorf("INVALID_RESPONSE_PLUGIN_TYPE")
+		}
+
+		resp, err = responsePlugin.ModifyResponse(req, resp)
+		if err != nil {
+			break
+		}
+	}
+
+	return resp, err
 }

@@ -46,21 +46,17 @@ func New(options Options) (*App, error) {
 		plugin := NewPluginManager(pluginCmd, options.UpstreamPluginOpts, options.UpstreamPluginsCount, UpstreamPlugin)
 		upstreamPlugins = append(upstreamPlugins, plugin)
 	}
+
 	// the upstreamPublisher needs to know about each pluginManager and in
 	// return, each upstreamPlugin needs to use the UpstreamPublisher
 	// because it implements the Manager interface and is what the
 	// RPCServer that is launched inside of each RPCClient uses to emit
 	// messages too
 	upstreamPublisher := NewUpstreamPublisher(upstreamPlugins, broadcaster)
-	// rpcUpstreamPublisher is an implementation of the upstreamPublisher
-	// that is operable via RPC. The primary difference being that it uses
-	// `shared.Error` instead of error interfaces
-	rpcUpstreamPublisher := &RPCUpstreamPublisher{upstreamPublisher}
-
 	// when the upstream plugins are configured, the publisher gets passed
 	// to them and used as the manager type. This allows the upstreamPlugin
 	// to talk back into this parent process.
-	options.UpstreamPluginOpts["manager"] = rpcUpstreamPublisher
+	options.UpstreamPluginOpts["manager"] = upstreamPublisher
 
 	// build an upstreamRequester for each server to communicate to the
 	// upstream store. This is used to find the correct upstream for each

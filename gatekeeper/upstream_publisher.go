@@ -8,7 +8,6 @@ import (
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-// TODO come up with a better sort of Stop/Start interface here?
 type Publisher interface {
 	Start() error
 	Stop(time.Duration) error
@@ -161,26 +160,4 @@ func (p *UpstreamPublisher) RemoveBackend(backendID shared.BackendID) error {
 		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
 	}
 	return nil
-}
-
-// this is a small type that implements the upstream_plugin.Manager interface
-// by wrapping an upstream publisher.
-type RPCUpstreamPublisher struct {
-	publisher *UpstreamPublisher
-}
-
-func (p *RPCUpstreamPublisher) AddUpstream(u shared.Upstream) *shared.Error {
-	return shared.NewError(p.publisher.AddUpstream(u))
-}
-
-func (p *RPCUpstreamPublisher) RemoveUpstream(uID shared.UpstreamID) *shared.Error {
-	return shared.NewError(p.publisher.RemoveUpstream(uID))
-}
-
-func (p *RPCUpstreamPublisher) AddBackend(uID shared.UpstreamID, backend shared.Backend) *shared.Error {
-	return shared.NewError(p.publisher.AddBackend(uID, backend))
-}
-
-func (p *RPCUpstreamPublisher) RemoveBackend(bID shared.BackendID) *shared.Error {
-	return shared.NewError(p.publisher.RemoveBackend(bID))
 }

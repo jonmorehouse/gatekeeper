@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	response_plugin "github.com/jonmorehouse/gatekeeper/plugin/response"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
@@ -82,27 +81,4 @@ func (r *responseModifier) Stop(duration time.Duration) error {
 	}
 
 	return nil
-}
-
-func (r *responseModifier) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
-	var err error
-
-	for _, pluginManager := range r.pluginManagers {
-		plugin, err := pluginManager.Get()
-		if err != nil {
-			return resp, fmt.Errorf("Unable to get response modifier plugin")
-		}
-
-		responsePlugin, ok := plugin.(response_plugin.PluginRPC)
-		if !ok {
-			return resp, fmt.Errorf("INVALID_RESPONSE_PLUGIN_TYPE")
-		}
-
-		resp, err = responsePlugin.ModifyResponse(req, resp)
-		if err != nil {
-			break
-		}
-	}
-
-	return resp, err
 }
