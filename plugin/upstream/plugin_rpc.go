@@ -30,26 +30,23 @@ type StopResp struct {
 
 // this is what the plugin is actually running behind the scenes
 type PluginRPCServer struct {
-	// impl is what Implements the public Plugin interface
-	impl    Plugin
-	broker  *plugin.MuxBroker
-	manager Manager
+	// impl is what Implements the public PluginRPC interface
+	impl   Plugin
+	broker *plugin.MuxBroker
+
+	// ManagerRPC is an interface wrapping Manager over RPC
+	managerRPC ManagerRPC
 }
 
 func (s *PluginRPCServer) Configure(args *ConfigureArgs, resp *ConfigureResp) error {
 	if err := s.impl.Configure(args.Opts); err != nil {
-		resp.Err = err
+		resp.Err = shared.NewError(err)
 	}
 	return nil
 }
 
 func (s *PluginRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) error {
-	rpcManager, ok := s.manager.(*ManagerRPCClient)
-	if !ok {
-		return shared.NewError(fmt.Errorf("Fatal: upstreams plugin's RPCServer has an RPCClient with no HeartBeat method"))
-	}
-
-	if err := rpcManager.Heartbeat(); err != nil {
+	if err := s.managerRPC.Heartbeat(); err != nil {
 		return shared.NewError(err)
 	}
 
@@ -57,7 +54,7 @@ func (s *PluginRPCServer) Heartbeat(args *HeartbeatArgs, resp *HeartbeatResp) er
 }
 
 func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
-	if s.manager != nil {
+	if s.managerRPC != nil {
 		return shared.NewError(fmt.Errorf("Manager already started; must stop first"))
 	}
 
@@ -66,28 +63,38 @@ func (s *PluginRPCServer) Start(args *StartArgs, resp *StartResp) error {
 		return shared.NewError(err)
 	}
 
-	// create an RPC connection to the parent's upstream manager and pass it into the plugin userspace
+	// create an RPC connection back to the parent, connecting againt the
+	// ManagerRPC interface that is being served from the parent process.
 	client := rpc.NewClient(conn)
-	manager := &ManagerRPCClient{
-		client: client,
-	}
 
-	// we call notify, so that the parent manager server can verify a
-	// connection was made. This is done in the background, and the manager
-	// server listens until it hears this call.
-	go manager.Notify()
+	// ManagerRPC implements the ManagerRPC interface, wrapping the Manager
+	// interface that talks back to the parent over RPC.
+	managerRPC := &ManagerRPCClient{client: client}
 
-	// Notify is not availably on the Manager interface and should not be called from any other context
-	s.manager = manager
-	if err := s.impl.Start(s.manager); err != nil {
-		resp.Err = err
+	// because ManagerRPC returns concrete *shared.Error types, we wrap it
+	// in layer to make it a nicer experience on the "Plugin" side.
+	// Specifically, this simply returns straight error types instead of
+	// *shared.Error types
+
+	// NOTE: we call Notify() to inform the parent process which is serving
+	// this manager over RPC that we have successfully connected from the
+	// plugin process. This method is no longer available once we downcast
+	// this type to a ManagerRPC by adding it to the current type.
+	go managerRPC.Notify()
+	s.managerRPC = managerRPC
+
+	// create a ManagerClient which is a wrapper around ManagerRPC which is
+	// what is passed along to the plugin's implementer.
+	managerWrapper := &ManagerClient{ManagerRPC: managerRPC}
+	if err := s.impl.Start(managerWrapper); err != nil {
+		resp.Err = shared.NewError(err)
 	}
 
 	return nil
 }
 
 func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
-	if s.manager == nil {
+	if s.managerRPC == nil {
 		resp.Err = shared.NewError(fmt.Errorf("No manager configured"))
 		return nil
 	}
@@ -95,14 +102,14 @@ func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
 	// if the plugin stop fails, we pass that along upstream, but still try
 	// to make sure the connection is closed
 	if err := s.impl.Stop(); err != nil {
-		resp.Err = err
+		resp.Err = shared.NewError(err)
 		return nil
 	}
 
 	// the manager owns its connection to the RPCServer, we go ahead and
 	// try to close it. If it errs out, we actually care about it at the RPC level
 	if err := s.impl.Stop(); err != nil {
-		resp.Err = err
+		resp.Err = shared.NewError(err)
 	}
 
 	return nil
@@ -110,8 +117,14 @@ func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
 
 // this implements the RPC that gatekeeper will interact with ...
 type PluginRPCClient struct {
-	broker  *plugin.MuxBroker
-	client  *rpc.Client
+	broker *plugin.MuxBroker
+	client *rpc.Client
+
+	// manager is the local type, in the parent process, which implements
+	// the upstream_plugin.Manager interface. Specifically, this is passed
+	// along and built into a ManagerRPC that is run inside the parent
+	// process accepting requests from plugins calling back into the
+	// parent.
 	manager Manager
 }
 
@@ -157,8 +170,9 @@ func (c *PluginRPCClient) Start() *shared.Error {
 	callArgs := StartArgs{connID}
 	callResp := StartResp{}
 
-	// start a server and run it in a goroutine; this will accept rpc calls
-	// from the child and run them in the correct place
+	// Start a ManagerRPCServer, which will take the impl, passing methods
+	// along to it and ensuring that the correct types are passed around in
+	// response.
 	connectedCh := make(chan interface{})
 	go func() {
 		managerRPCServer := ManagerRPCServer{
