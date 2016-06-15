@@ -4,6 +4,10 @@ import "time"
 
 type UpstreamID string
 
+func (u UpstreamID) String() string {
+	return string(u)
+}
+
 var NilUpstreamID UpstreamID = ""
 var NilUpstream Upstream = Upstream{}
 
@@ -49,6 +53,5 @@ func (u Upstream) HasPrefix(name string) bool {
 			return true
 		}
 	}
-
 	return false
 }

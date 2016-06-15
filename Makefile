@@ -2,7 +2,7 @@ default: test
 
 # def setup sets up the local environment
 dev_setup:
-	@sh -c "gpm install"
+	@GOPATH=/gopath sh -c "curl -s https://raw.githubusercontent.com/pote/gpm/v1.4.0/bin/gpm | bash"
 
 # dev builds gatekeeper locally and places the compiled binaries into ./bin as
 # well as $GOPATH/bin.
