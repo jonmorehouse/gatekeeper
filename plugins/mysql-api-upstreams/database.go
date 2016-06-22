@@ -47,6 +47,10 @@ type database struct {
 }
 
 func (d *database) Connect(dsn string) error {
+	if d.db != nil {
+		return fmt.Errorf("Already connected")
+	}
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return err
@@ -60,6 +64,9 @@ func (d *database) Connect(dsn string) error {
 }
 
 func (d *database) Disconnect() error {
+	if d.db == nil {
+		return fmt.Errorf("Not connected")
+	}
 	return d.db.Close()
 }
 
@@ -134,7 +141,7 @@ func (d *database) RemoveUpstream(upstreamID shared.UpstreamID) error {
 		}
 	}
 
-	_, err = transaction.Exec("DELETE FROM `upstream` WHERE `upstream_id`=?", upstreamID.String())
+	_, err = transaction.Exec("DELETE FROM `upstream` WHERE `id`=?", upstreamID.String())
 	if err != nil {
 		rollback()
 		return err
