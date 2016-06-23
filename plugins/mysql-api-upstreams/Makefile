@@ -30,7 +30,5 @@ db_teardown:
 	docker rm gatekeeper-mysql_api_upstream
 
 integration:
+	@echo "running integration tests for mysql-api-upstreams ..."
 	GOPATH=/gopath go test -tags=integration .
-
-unit:
-	GOPATH=/gopath go test .

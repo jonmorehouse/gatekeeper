@@ -71,12 +71,5 @@ EOF
       ln -sf /gatekeeper /root/gatekeeper
       echo "symlinking /gatekeeper to vagrant homedir ..."
       ln -sf /gatekeeper ~vagrant/gatekeeper
-
-      for dir in `ls /gatekeeper/plugins`; do
-        echo "symlinking /gatekeeper/plugins/$dir to root homedir ..."
-        ln -sf /gatekeeper/plugins/$dir /root/$dir
-        echo "symlinking /gatekeeper/plugins/$dir to vagrant homedir ..."
-        ln -sf /gatekeeper/plugins/$dir ~vagrant/$dir
-      done
     SHELL
 end

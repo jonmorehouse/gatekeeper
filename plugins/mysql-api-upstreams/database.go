@@ -116,7 +116,7 @@ func (d *database) AddUpstream(upstream *shared.Upstream) (shared.UpstreamID, er
 
 	// commit all protocols
 	for _, protocol := range upstream.Protocols {
-		_, err := transaction.Exec("INSERT INTO `upstream_mapping` (`upstream_id`, `mapping_type`, `mapping`) VALUES (?, 'protocol', ?)", upstreamID.String(), protocol.String())
+		_, err := transaction.Exec("INSERT INTO `upstream_protocol` (`upstream_id`, `protocol`) VALUES (?, ?)", upstreamID.String(), protocol.String())
 		if err != nil {
 			rollback()
 			return shared.NilUpstreamID, err
@@ -153,6 +153,12 @@ func (d *database) RemoveUpstream(upstreamID shared.UpstreamID) error {
 		return err
 	}
 
+	_, err = transaction.Exec("DELETE FROM `upstream_protocol` WHERE `upstream_id`=?", upstreamID.String())
+	if err != nil {
+		rollback()
+		return err
+	}
+
 	_, err = transaction.Exec("DELETE FROM `backend` WHERE `upstream_id`=?", upstreamID.String())
 	if err != nil {
 		rollback()
@@ -167,7 +173,7 @@ func (d *database) RemoveUpstream(upstreamID shared.UpstreamID) error {
 }
 
 func (d *database) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) (shared.BackendID, error) {
-	result, err := d.db.Exec("INSERT INTO `upstream` (`upstream_id`, `address`, `healthcheck`) VALUES (?, ?, ?)", upstreamID.String(), backend.Address, backend.HealthCheck)
+	result, err := d.db.Exec("INSERT INTO `backend` (`upstream_id`, `address`, `healthcheck`) VALUES (?, ?, ?)", upstreamID.String(), backend.Address, backend.HealthCheck)
 	if err != nil {
 		return shared.NilBackendID, err
 	}
@@ -222,7 +228,7 @@ func (d *database) FetchUpstreams() ([]*shared.Upstream, error) {
 		return []*shared.Upstream(nil), err
 	}
 
-	rows, err = d.db.Query("SELECT `upstream_id`, `mapping_type`, `mapping_value` FROM `upstream_mapping`")
+	rows, err = d.db.Query("SELECT `upstream_id`, `mapping_type`, `mapping` FROM `upstream_mapping`")
 	if err != nil {
 		return []*shared.Upstream(nil), err
 	}
@@ -265,7 +271,7 @@ func (d *database) FetchUpstreams() ([]*shared.Upstream, error) {
 	for _, upstream := range upstreams {
 		results = append(results, upstream)
 	}
-	return []*shared.Upstream(nil), nil
+	return results, nil
 }
 
 func (d *database) FetchUpstreamBackends(upstreamID shared.UpstreamID) ([]*shared.Backend, error) {
@@ -282,11 +288,14 @@ func (d *database) FetchUpstreamBackends(upstreamID shared.UpstreamID) ([]*share
 			return []*shared.Backend(nil), err
 		}
 		backends = append(backends, &shared.Backend{
-			ID:          shared.BackendID(backendID),
+			ID:          shared.BackendID(strconv.FormatInt(backendID, 10)),
 			Address:     address,
 			HealthCheck: healthcheck,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		return []*shared.Backend(nil), err
+	}
 
-	return []*shared.Backend(nil), nil
+	return backends, nil
 }

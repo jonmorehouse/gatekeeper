@@ -10,12 +10,26 @@ CREATE TABLE IF NOT EXISTS `upstream` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 ALTER TABLE `upstream` AUTO_INCREMENT = 1000;
 
+-- upstream_protocol table
+CREATE TABLE IF NOT EXISTS `upstream_protocol` (
+	`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'upstream protocol',
+	`upstream_id` int(11) NOT NULL COMMENT 'parent upstream id',
+	`protocol` ENUM('http-internal', 'http-public'),
+	`created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'utc date the upstream was created',
+
+	PRIMARY KEY (`id`),
+	UNIQUE KEY `idx_protocol` (`upstream_id`, `protocol`) COMMENT 'composite index ensuring that no upstream has duplicate protocols'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+ALTER TABLE `upstream` AUTO_INCREMENT = 1000;
+
+
 -- upstream_mapping table
 CREATE TABLE IF NOT EXISTS `upstream_mapping` (
 	`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'unique primary key',
 	`upstream_id` int(11) NOT NULL COMMENT 'parent upstream ID',
 	`mapping` varchar(400) COLLATE utf8_unicode_ci NOT NULL COMMENT 'hostname or prefix',
-	`mapping_type` ENUM('prefix', 'hostname', 'protocol'),
+	`mapping_type` ENUM('prefix', 'hostname'),
+	`created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'utc date the upstream was created',
 
 	PRIMARY KEY (`id`),
 	UNIQUE KEY `idx_mapping` (`mapping`, `mapping_type`) COMMENT 'composite index ensuring that no mapping/mapping-type combination exists'
