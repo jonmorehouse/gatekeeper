@@ -2,6 +2,10 @@ package shared
 
 type BackendID string
 
+func (b BackendID) String() string {
+	return string(b)
+}
+
 var NilBackendID BackendID = ""
 var NilBackend Backend = Backend{}
 
@@ -18,6 +22,5 @@ func NewBackendID() BackendID {
 type Backend struct {
 	ID          BackendID
 	Address     string
-	Host        string
 	HealthCheck string
 }

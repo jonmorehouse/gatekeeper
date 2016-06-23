@@ -51,6 +51,10 @@ type ManagerRPCClient struct {
 	client *rpc.Client
 }
 
+func (c *ManagerRPCClient) Close() {
+	c.client.Close()
+}
+
 func (c *ManagerRPCClient) Notify() *shared.Error {
 	err := c.client.Call("Plugin.Notify", &NotifyArgs{}, &NotifyResp{})
 	return shared.NewError(err)

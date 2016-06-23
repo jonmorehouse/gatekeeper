@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
 	"github.com/jonmorehouse/gatekeeper/shared"
@@ -46,11 +45,11 @@ func (p *Plugin) ModifyRequest(req *shared.Request) (*shared.Request, error) {
 func (Plugin) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
 	resp.Header.Set("X-Request-ID", req.Header["X-Request-ID"][0])
 
-	// replace the body with a custom message
-	reader := strings.NewReader("hello world this was overwritten in a plugin")
-	if err := resp.SetBody(reader); err != nil {
-		return resp, err
-	}
+	//// replace the body with a custom message
+	//reader := strings.NewReader("hello world this was overwritten in a plugin")
+	//if err := resp.SetBody(reader); err != nil {
+	//return resp, err
+	//}
 
 	return resp, nil
 }

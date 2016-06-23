@@ -108,10 +108,11 @@ func (s *PluginRPCServer) Stop(args *StopArgs, resp *StopResp) error {
 
 	// the manager owns its connection to the RPCServer, we go ahead and
 	// try to close it. If it errs out, we actually care about it at the RPC level
-	if err := s.impl.Stop(); err != nil {
-		resp.Err = shared.NewError(err)
+	managerRPCClient, ok := s.managerRPC.(*ManagerRPCClient)
+	if !ok {
+		return fmt.Errorf("invalid managerRPCClient; this is a gatekeeper-internal error")
 	}
-
+	managerRPCClient.Close()
 	return nil
 }
 

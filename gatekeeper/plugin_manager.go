@@ -75,11 +75,13 @@ func (p *pluginManager) Start() error {
 			defer wg.Done()
 			if err := plugin.Configure(p.opts); err != nil {
 				errs.Add(err)
+				plugin.Kill()
 				return
 			}
 
 			if err := plugin.Start(); err != nil {
 				errs.Add(err)
+				plugin.Kill()
 			}
 		}(instance)
 	}
@@ -112,11 +114,11 @@ func (p *pluginManager) Stop(duration time.Duration) error {
 	var wg sync.WaitGroup
 	for _, instance := range p.instances {
 		wg.Add(1)
-		go func(p Plugin) {
-			if err := p.Stop(); err != nil {
+		go func(instance Plugin) {
+			if err := instance.Stop(); err != nil {
 				errs.Add(err)
 			}
-
+			instance.Kill()
 			wg.Done()
 		}(instance)
 	}
