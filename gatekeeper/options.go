@@ -33,11 +33,11 @@ type Options struct {
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `event` or `/home/foo/bin/event`
-	EventPlugins []string
+	MetricPlugins []string
 	// number of instances to run
-	EventPluginsCount uint
+	MetricPluginsCount uint
 	// Opts to be passed along to plugin. Not currently used
-	EventPluginOpts map[string]interface{}
+	MetricPluginOpts map[string]interface{}
 
 	// Ports to start servers listening on. If not provided, the server
 	// will not be started. If collisions are detected, then this will

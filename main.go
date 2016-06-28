@@ -31,10 +31,10 @@ func main() {
 	flag.UintVar(&options.LoadBalancerPluginsCount, "loadbalancer-plugins-count", 1, "number of instances of each loadbalancer plugin to operate")
 	loadBalancerPluginOpts := flag.String("loadbalancer-plugins-opts", "{}", "json encoded options to be passed to each loadbalancer plugin")
 
-	// eventPlugin configuration
-	eventPlugins := flag.String("event-plugins", "event-logger", "comma delimited list of event plugin executables. default: event-logger")
-	flag.UintVar(&options.EventPluginsCount, "event-plugins-count", 1, "number of instances of each event plugin to operate")
-	eventPluginOpts := flag.String("event-plugins-opts", "{}", "json encoded options to be passed to each event plugin")
+	// MetricsPlugins configuration
+	metricPlugins := flag.String("metric-plugins", "metric-logger", "comma delimited list of metric plugin executables. default: metric-logger")
+	flag.UintVar(&options.MetricPluginsCount, "metric-plugins-count", 1, "number of instances of each metric plugin to operate")
+	metricPluginOpts := flag.String("metric-plugins-opts", "{}", "json encoded options to be passed to each metric plugin")
 
 	// modifierPlugin configuration
 	modifierPlugins := flag.String("modifier-plugins", "modifier", "comma delimited list of modifier plugin executables. default: modifier")
@@ -66,10 +66,10 @@ func main() {
 	}
 
 	// validate event plugin configuration
-	options.EventPlugins = strings.Split(*eventPlugins, ",")
-	options.EventPluginOpts, err = parseJSONOpts(*eventPluginOpts)
+	options.MetricPlugins = strings.Split(*metricPlugins, ",")
+	options.MetricPluginOpts, err = parseJSONOpts(*metricPluginOpts)
 	if err != nil {
-		log.Fatal("Invalid JSON for event-plugin-opts")
+		log.Fatal("Invalid JSON for metric-plugin-opts")
 	}
 
 	options.ModifierPlugins = strings.Split(*modifierPlugins, ",")

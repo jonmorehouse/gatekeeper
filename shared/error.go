@@ -1,5 +1,14 @@
 package shared
 
+import (
+	"fmt"
+	"log"
+)
+
+// shared.Error is an RPC friendly error which is used for transferring errors
+// back and forth from plugins and the parent process. Behind the scenes, the
+// plugin/* packages are responsible for accepting generic error interfaces,
+// casting them to *shared.Error types and then transmitting them over the wire
 type Error struct {
 	Message string
 }
@@ -24,4 +33,16 @@ func ErrorToError(e *Error) error {
 		return nil
 	}
 	return e
+}
+
+var ProgrammingErrorFatal bool
+
+// ProgrammingError's should not happen in normal operations
+func ProgrammingError(msg string) {
+	err := fmt.Sprintf("programming error: ", msg)
+	if ProgrammingErrorFatal {
+		log.Fatal(err)
+	} else {
+		log.Print(err)
+	}
 }

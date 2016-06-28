@@ -22,5 +22,5 @@ func NewBackendID() BackendID {
 type Backend struct {
 	ID          BackendID
 	Address     string
-	HealthCheck string
+	Healthcheck string
 }

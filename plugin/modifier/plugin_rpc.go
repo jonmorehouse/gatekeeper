@@ -47,6 +47,17 @@ type ModifyResponseResp struct {
 	Err      *shared.Error
 }
 
+type ModifyErrorResponseArgs struct {
+	Error    *shared.Error
+	Request  *shared.Request
+	Response *shared.Response
+}
+
+type ModifyErrorResponseResp struct {
+	Response *shared.Response
+	Err      *shared.Error
+}
+
 // implement the RPC server which the plugin runs, mapping to the Plugin
 // interface specified locally
 type RPCServer struct {
@@ -87,6 +98,13 @@ func (s *RPCServer) ModifyRequest(args *ModifyRequestArgs, resp *ModifyRequestRe
 
 func (s *RPCServer) ModifyResponse(args *ModifyResponseArgs, resp *ModifyResponseResp) error {
 	response, err := s.impl.ModifyResponse(args.Request, args.Response)
+	resp.Err = shared.NewError(err)
+	resp.Response = response
+	return nil
+}
+
+func (s *RPCServer) ModifyErrorResponse(args *ModifyErrorResponseArgs, resp *ModifyErrorResponseResp) error {
+	response, err := s.impl.ModifyErrorResponse(args.Error, args.Request, args.Response)
 	resp.Err = shared.NewError(err)
 	resp.Response = response
 	return nil
@@ -157,5 +175,19 @@ func (c *RPCClient) ModifyResponse(req *shared.Request, resp *shared.Response) (
 		return nil, shared.NewError(err)
 	}
 
+	return callResp.Response, callResp.Err
+}
+
+func (c *RPCClient) ModifyErrorResponse(err *shared.Error, req *shared.Request, resp *shared.Response) (*shared.Response, *shared.Error) {
+	callArgs := ModifyErrorResponseArgs{
+		Error:    err,
+		Request:  req,
+		Response: resp,
+	}
+	callResp := ModifyErrorResponseResp{}
+
+	if err := c.client.Call("Plugin.ModifyErrorResponse", &callArgs, &callResp); err != nil {
+		return nil, shared.NewError(err)
+	}
 	return callResp.Response, callResp.Err
 }

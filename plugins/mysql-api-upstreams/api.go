@@ -40,7 +40,7 @@ type formattedUpstream struct {
 type formattedBackend struct {
 	ID          shared.BackendID `json:"id"`
 	Address     string           `json:"address"`
-	HealthCheck string           `json:"healthcheck"`
+	Healthcheck string           `json:"healthcheck"`
 }
 
 // standard error response
@@ -81,7 +81,7 @@ type addUpstreamResponse struct {
 type addBackendRequest struct {
 	UpstreamID  shared.UpstreamID `json:"upstream_id"`
 	Address     string            `json:"address"`
-	HealthCheck string            `json:"healthcheck"`
+	Healthcheck string            `json:"healthcheck"`
 }
 
 type addBackendResponse struct {
@@ -150,7 +150,7 @@ func newFormattedBackend(backend *shared.Backend) *formattedBackend {
 	return &formattedBackend{
 		ID:          backend.ID,
 		Address:     backend.Address,
-		HealthCheck: backend.HealthCheck,
+		Healthcheck: backend.Healthcheck,
 	}
 }
 
@@ -163,7 +163,7 @@ func newBackend(rawBackend *addBackendRequest) (*shared.Backend, error) {
 	return &shared.Backend{
 		ID:          shared.NilBackendID,
 		Address:     rawBackend.Address,
-		HealthCheck: rawBackend.HealthCheck,
+		Healthcheck: rawBackend.Healthcheck,
 	}, nil
 }
 

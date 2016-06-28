@@ -173,7 +173,7 @@ func (d *database) RemoveUpstream(upstreamID shared.UpstreamID) error {
 }
 
 func (d *database) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) (shared.BackendID, error) {
-	result, err := d.db.Exec("INSERT INTO `backend` (`upstream_id`, `address`, `healthcheck`) VALUES (?, ?, ?)", upstreamID.String(), backend.Address, backend.HealthCheck)
+	result, err := d.db.Exec("INSERT INTO `backend` (`upstream_id`, `address`, `healthcheck`) VALUES (?, ?, ?)", upstreamID.String(), backend.Address, backend.Healthcheck)
 	if err != nil {
 		return shared.NilBackendID, err
 	}
@@ -290,7 +290,7 @@ func (d *database) FetchUpstreamBackends(upstreamID shared.UpstreamID) ([]*share
 		backends = append(backends, &shared.Backend{
 			ID:          shared.BackendID(strconv.FormatInt(backendID, 10)),
 			Address:     address,
-			HealthCheck: healthcheck,
+			Healthcheck: healthcheck,
 		})
 	}
 	if err := rows.Err(); err != nil {

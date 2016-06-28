@@ -47,14 +47,26 @@ func (s *StaticUpstreams) worker() {
 		log.Println("Static upstreams plugin was unable to emit an upstream...", err)
 	}
 
-	backend := &shared.Backend{
-		ID:      shared.NewBackendID(),
-		Address: "https://httpbin.org",
+	backends := []*shared.Backend{
+		&shared.Backend{
+			ID:      shared.NewBackendID(),
+			Address: "http://localhost:8080",
+		},
+		&shared.Backend{
+			ID:      shared.NewBackendID(),
+			Address: "http://localhost:8081",
+		},
+		&shared.Backend{
+			ID:      shared.NewBackendID(),
+			Address: "http://localhost:8082",
+		},
 	}
 
-	err = s.manager.AddBackend(upstream.ID, backend)
-	if err != nil {
-		log.Println("Static upstreams plugin was unable to emit a backend...", err)
+	for _, backend := range backends {
+		err = s.manager.AddBackend(upstream.ID, backend)
+		if err != nil {
+			log.Println("Static upstreams plugin was unable to emit a backend...", err)
+		}
 	}
 
 	// block in this background worker until a stop signal is triggered by

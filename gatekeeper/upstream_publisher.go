@@ -25,23 +25,26 @@ type UpstreamPublisher struct {
 	broadcaster    EventBroadcaster
 
 	// keep a tally of the upstreams / plugins we've seen here by ID only
-	knownUpstreams map[shared.UpstreamID]interface{}
-	knownBackends  map[shared.BackendID]interface{}
+	knownUpstreams map[shared.UpstreamID]*shared.Upstream
+	knownBackends  map[shared.BackendID]*shared.Backend
+
+	metricWriter MetricWriterClient
 
 	sync.RWMutex
 }
 
-func NewUpstreamPublisher(pluginManagers []PluginManager, broadcaster EventBroadcaster) *UpstreamPublisher {
+func NewUpstreamPublisher(pluginManagers []PluginManager, broadcaster EventBroadcaster, metricWriter MetricWriterClient) *UpstreamPublisher {
 	return &UpstreamPublisher{
+		metricWriter:   metricWriter,
 		pluginManagers: pluginManagers,
 		broadcaster:    broadcaster,
-		knownUpstreams: make(map[shared.UpstreamID]interface{}),
-		knownBackends:  make(map[shared.BackendID]interface{}),
+		knownUpstreams: make(map[shared.UpstreamID]*shared.Upstream),
+		knownBackends:  make(map[shared.BackendID]*shared.Backend),
 	}
 }
 
 func (p *UpstreamPublisher) Start() error {
-	errs := NewAsyncMultiError()
+	errs := NewMultiError()
 
 	var wg sync.WaitGroup
 
@@ -62,7 +65,7 @@ func (p *UpstreamPublisher) Start() error {
 }
 
 func (p *UpstreamPublisher) Stop(duration time.Duration) error {
-	errs := NewAsyncMultiError()
+	errs := NewMultiError()
 
 	var wg sync.WaitGroup
 	doneCh := make(chan struct{})
@@ -97,14 +100,18 @@ func (p *UpstreamPublisher) Stop(duration time.Duration) error {
 func (p *UpstreamPublisher) AddUpstream(upstream *shared.Upstream) error {
 	p.Lock()
 	defer p.Unlock()
-	p.knownUpstreams[upstream.ID] = struct{}{}
+
+	p.eventMetric(shared.UpstreamAddedEvent)
+	p.upstreamMetric(shared.UpstreamAddedEvent, upstream, nil)
+
+	p.knownUpstreams[upstream.ID] = upstream
 	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType:  UpstreamAdded,
 		Upstream:   upstream,
 		UpstreamID: upstream.ID,
 	})
 	if err != nil {
-		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
+		return InternalBroadcastError
 	}
 	return nil
 }
@@ -112,9 +119,15 @@ func (p *UpstreamPublisher) AddUpstream(upstream *shared.Upstream) error {
 func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	p.Lock()
 	defer p.Unlock()
-	if _, ok := p.knownUpstreams[upstreamID]; !ok {
-		return fmt.Errorf("UPSTREAM_NOT_FOUND")
+
+	upstream, ok := p.knownUpstreams[upstreamID]
+	if !ok {
+		p.eventMetric(shared.PluginErrorEvent)
+		return UpstreamNotFoundError
 	}
+
+	p.eventMetric(shared.UpstreamRemovedEvent)
+	p.upstreamMetric(shared.UpstreamRemovedEvent, upstream, nil)
 
 	delete(p.knownUpstreams, upstreamID)
 	err := p.broadcaster.Publish(UpstreamEvent{
@@ -122,7 +135,7 @@ func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 		UpstreamID: upstreamID,
 	})
 	if err != nil {
-		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
+		return InternalBroadcastError
 	}
 	return nil
 }
@@ -130,9 +143,15 @@ func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
 	p.Lock()
 	defer p.Unlock()
-	if _, ok := p.knownUpstreams[upstreamID]; !ok {
-		return fmt.Errorf("UPSTREAM_NOT_FOUND")
+
+	upstream, ok := p.knownUpstreams[upstreamID]
+	if !ok {
+		p.eventMetric(shared.PluginErrorEvent)
+		return UpstreamNotFoundError
 	}
+
+	p.eventMetric(shared.BackendAddedEvent)
+	p.upstreamMetric(shared.BackendAddedEvent, upstream, backend)
 
 	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType:  BackendAdded,
@@ -141,7 +160,8 @@ func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend *sh
 		Backend:    backend,
 	})
 	if err != nil {
-		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
+		shared.ProgrammingError("internal publish pipeline error")
+		return InternalBroadcastError
 	}
 	return nil
 }
@@ -149,15 +169,38 @@ func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend *sh
 func (p *UpstreamPublisher) RemoveBackend(backendID shared.BackendID) error {
 	p.Lock()
 	defer p.Unlock()
-	if _, ok := p.knownBackends[backendID]; !ok {
-		return fmt.Errorf("BACKEND_NOT_FOUND")
+	backend, ok := p.knownBackends[backendID]
+	if !ok {
+		p.eventMetric(shared.PluginErrorEvent)
+		return BackendNotFoundError
 	}
+
+	p.eventMetric(shared.BackendRemovedEvent)
+	p.upstreamMetric(shared.BackendRemovedEvent, nil, backend)
+
 	err := p.broadcaster.Publish(UpstreamEvent{
 		EventType: BackendRemoved,
 		BackendID: backendID,
 	})
 	if err != nil {
-		return fmt.Errorf("UNABLE_TO_BROADCAST_MESSAGE")
+		return InternalBroadcastError
 	}
 	return nil
+}
+
+func (p *UpstreamPublisher) eventMetric(event shared.MetricEvent) {
+	p.metricWriter.EventMetric(&shared.EventMetric{
+		Timestamp: time.Now(),
+		Event:     event,
+		Extra:     map[string]string{},
+	})
+}
+
+func (p *UpstreamPublisher) upstreamMetric(event shared.MetricEvent, upstream *shared.Upstream, backend *shared.Backend) {
+	p.metricWriter.UpstreamMetric(&shared.UpstreamMetric{
+		Event:     event,
+		Timestamp: time.Now(),
+		Upstream:  upstream,
+		Backend:   backend,
+	})
 }

@@ -2,8 +2,8 @@ package gatekeeper
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -14,29 +14,32 @@ import (
 )
 
 type Proxier interface {
-	Proxy(http.ResponseWriter, *http.Request, *shared.Request, *shared.Backend) error
+	Proxy(http.ResponseWriter, *http.Request, *shared.Request, *shared.Backend, *shared.RequestMetric) error
 }
 
 type proxier struct {
 	defaultTimeout time.Duration
 
-	modifier Modifier
+	modifier     Modifier
+	metricWriter MetricWriterClient
 	sync.RWMutex
 
 	requests map[*http.Request]*shared.Request
+	metrics  map[*http.Request]*shared.RequestMetric
 }
 
-func NewProxier(modifier Modifier, defaultTimeout time.Duration) Proxier {
+func NewProxier(modifier Modifier, metricWriter MetricWriterClient) Proxier {
 	return &proxier{
-		defaultTimeout: defaultTimeout,
-		modifier:       modifier,
-		requests:       make(map[*http.Request]*shared.Request),
+		modifier:     modifier,
+		requests:     make(map[*http.Request]*shared.Request),
+		metrics:      make(map[*http.Request]*shared.RequestMetric),
+		metricWriter: metricWriter,
 	}
 }
 
-func (p *proxier) Proxy(rw http.ResponseWriter, rawReq *http.Request, req *shared.Request, backend *shared.Backend) error {
+func (p *proxier) Proxy(rw http.ResponseWriter, httpReq *http.Request, req *shared.Request, backend *shared.Backend, metric *shared.RequestMetric) error {
 	// first, we build out a new request to be proxied
-	p.modifyRawRequest(rawReq, req)
+	p.modifyProxyRequest(httpReq, req)
 
 	// build out the backend proxier
 	backendURL, err := url.Parse(backend.Address)
@@ -46,7 +49,7 @@ func (p *proxier) Proxy(rw http.ResponseWriter, rawReq *http.Request, req *share
 
 	// NOTE, we could probably cache these proxies by backend, but
 	// underneath the hood, the transport is going to reuse connections
-	// where possible as well.
+	// where possible
 	proxy := httputil.NewSingleHostReverseProxy(backendURL)
 
 	originalDirector := proxy.Director
@@ -59,41 +62,64 @@ func (p *proxier) Proxy(rw http.ResponseWriter, rawReq *http.Request, req *share
 		// we have access to the "gatekeeper" request which is RPC compatible
 		// and can be passed along to our plugins for modification.
 		p.Lock()
-		defer p.Unlock()
 		p.requests[proxyReq] = req
+		p.metrics[proxyReq] = metric
+		p.Unlock()
 	}
 
 	// the proxier type, this local struct acts as the actual Proxier,
 	// simply relying upon the default round trip var to make the requests
 	proxy.Transport = p
-	proxy.ServeHTTP(rw, rawReq)
+
+	// NOTE: move this latency timing down into the director / proxy level to remove more overhead
+	startTS := time.Now()
+	proxy.ServeHTTP(rw, httpReq)
+	metric.ProxyLatency = time.Now().Sub(startTS)
+
 	return nil
 }
 
-func (p *proxier) modifyRawRequest(rawReq *http.Request, req *shared.Request) {
-	if req.UpstreamMatchType == shared.PrefixMatch {
-		rawReq.URL.Path = req.PrefixlessPath
+func (p *proxier) modifyProxyRequest(httpReq *http.Request, req *shared.Request) {
+	if req.UpstreamMatchType == shared.PrefixUpstreamMatch {
+		httpReq.URL.Path = req.PrefixlessPath
 	} else {
-		rawReq.URL.Path = req.Path
+		httpReq.URL.Path = req.Path
 	}
 
-	rawReq.Header = req.Header
+	httpReq.Header = req.Header
 }
 
-func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
-	request, found := p.requests[rawReq]
+func (p *proxier) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
+	p.Lock()
+	metric, found := p.metrics[httpRequest]
 	if !found {
-		return nil, fmt.Errorf("INTERNAL_ERROR_REQUEST_CACHE_PROBLEM")
+		p.Unlock()
+		response := shared.NewErrorResponse(500, InternalProxierError)
+		metric.Response = response
+		metric.Error = InternalProxierError
+		return p.errorResponse(InternalProxierError, &shared.Request{}, response)
 	}
+	delete(p.metrics, httpRequest)
+
+	request, found := p.requests[httpRequest]
+	if !found {
+		p.Unlock()
+		response := shared.NewErrorResponse(500, InternalProxierError)
+		metric.Error = InternalProxierError
+		metric.Response = response
+		return p.errorResponse(InternalProxierError, &shared.Request{}, response)
+	}
+	delete(p.requests, httpRequest)
+	p.Unlock()
 
 	var wg sync.WaitGroup
 	var err error
-	var rawResp *http.Response
+	var httpResp *http.Response
 
 	// set the cancelCh on the request so we can properly clean it up, even
 	// after we've caught the timeout on our transport
 	cancelCh := make(chan struct{})
-	rawReq.Cancel = cancelCh
+	httpRequest.Cancel = cancelCh
 
 	// proxy the request, respecting the specified _total_ timeout. For
 	// now, this timeout doesn't differentiate between dial and response
@@ -101,8 +127,10 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 	wg.Add(1)
 	go func() {
 		// perform the request using the default RoundTrip mechanism, creating
-		// an RPC compatbile response with the rawResponse once finished
-		rawResp, err = http.DefaultTransport.RoundTrip(rawReq)
+		// an RPC compatbile response with the httpResp once finished
+		startTS := time.Now()
+		httpResp, err = http.DefaultTransport.RoundTrip(httpRequest)
+		metric.ProxyLatency = time.Now().Sub(startTS)
 		wg.Done()
 	}()
 
@@ -129,7 +157,7 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 					return
 				case <-time.After(timeout):
 					close(cancelCh)
-					err = fmt.Errorf("TIMEOUT")
+					err = ProxyTimeoutError
 					return
 				}
 			}
@@ -139,34 +167,66 @@ func (p *proxier) RoundTrip(rawReq *http.Request) (*http.Response, error) {
 	}
 
 	if err != nil {
-		return rawResp, err
+		response := shared.NewErrorResponse(500, ProxyTimeoutError)
+		metric.Response = response
+		metric.Error = ProxyTimeoutError
+		return p.errorResponse(err, request, response)
 	}
 
-	resp := shared.NewResponse(rawResp)
-	// modify the response using our modifier and then map the
-	// response back to an _actual_ http.Response to be sent back to the
-	// client.
+	// the response was successfully proxied, build a local response object
+	// and modify it before returning to the caller
+	resp := shared.NewResponse(httpResp)
+
+	// if any err occurs modifying the request it most likely means that
+	// either a.) something extenuating is happening and we can't
+	// communicate over RPC or b.) the modifier emitted an error. If we
+	// can't communicate over RPC, then we drop the response from the proxy
+	// and write an internal error. If the modifier returned an error, then
+	// we assume that they also would like to drop the response and
+	// consider it an internal error.
+	startTS := time.Now()
 	resp, err = p.modifier.ModifyResponse(request, resp)
+	metric.ResponseModifierLatency = time.Now().Sub(startTS)
 	if err != nil {
-		return rawResp, err
+		response := shared.NewErrorResponse(500, ModifierPluginError)
+		metric.Response = response
+		metric.Error = ModifierPluginError
+		return p.errorResponse(err, request, response)
 	}
 
+	metric.Response = resp
+
+	// by design, we never return an error here because we explicitly build our own error responses
+	return httpResp, nil
+}
+
+func (p *proxier) responseToHTTPResponse(response *shared.Response, httpResp *http.Response) {
 	// transform the local response back to an http.Response
-	rawResp.Status = resp.Status
-	rawResp.StatusCode = resp.StatusCode
-	rawResp.Proto = resp.Proto
-	rawResp.ProtoMajor = resp.ProtoMajor
-	rawResp.ProtoMinor = resp.ProtoMinor
-	rawResp.Header = resp.Header
-	rawResp.ContentLength = resp.ContentLength
-	rawResp.TransferEncoding = resp.TransferEncoding
-	rawResp.Close = resp.Close
-	rawResp.Trailer = resp.Trailer
+	httpResp.Status = response.Status
+	httpResp.StatusCode = response.StatusCode
+	httpResp.Proto = response.Proto
+	httpResp.ProtoMajor = response.ProtoMajor
+	httpResp.ProtoMinor = response.ProtoMinor
+	httpResp.Header = response.Header
+	httpResp.ContentLength = response.ContentLength
+	httpResp.TransferEncoding = response.TransferEncoding
+	httpResp.Close = response.Close
+	httpResp.Trailer = response.Trailer
 
 	// if the response plugin specified a response body, then we go ahead
 	// and override with it in the actual response
-	if resp.OverrideBody != nil {
-		rawResp.Body = ioutil.NopCloser(bytes.NewReader(resp.OverrideBody))
+	if response.Body != nil {
+		httpResp.Body = ioutil.NopCloser(bytes.NewReader(response.Body))
 	}
-	return rawResp, err
+}
+
+func (p *proxier) errorResponse(err error, request *shared.Request, response *shared.Response) (*http.Response, error) {
+	_, err = p.modifier.ModifyErrorResponse(err, request, response)
+	if err != nil {
+		log.Println("ModifierPlugin.ErrorResponse method failed: ", err)
+	}
+
+	httpResp := &http.Response{}
+	p.responseToHTTPResponse(response, httpResp)
+	return httpResp, nil
 }
