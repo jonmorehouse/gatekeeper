@@ -177,7 +177,7 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 	// proxy error in the proxy lifecycle is handled internally, due to the
 	// coupling that is required with the internal go httputil.ReverseProxy
 	// and http.Transport types
-	if err := s.proxier.Proxy(rw, rawReq, req, backend, metric); err != nil {
+	if err := s.proxier.Proxy(rw, rawReq, req, upstream, backend, metric); err != nil {
 		resp := shared.NewErrorResponse(500, err)
 		metric.Response = resp
 		metric.Error = err

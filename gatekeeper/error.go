@@ -30,6 +30,7 @@ const (
 	BackendNotFoundError
 	ProxyTimeoutError
 	NoBackendsFoundError
+	BackendAddressError
 
 	// PluginErrors
 	LoadBalancerPluginError
@@ -49,6 +50,7 @@ var internalErrorMapping = map[internalError]string{
 	ResponseWriteError:      "response write error",
 	UpstreamNotFoundError:   "upstream not found",
 	BackendNotFoundError:    "backend not found",
+	BackendAddressError:     "backend address error",
 	NoBackendsFoundError:    "no upstream backends found",
 	InternalProxierError:    "internal proxier error",
 	LoadBalancerPluginError: "load balancer plugin error",
