@@ -3,7 +3,6 @@ package gatekeeper
 import (
 	"bytes"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -24,6 +23,7 @@ type proxier struct {
 }
 
 func NewProxier(modifier Modifier, metricWriter MetricWriterClient) Proxier {
+	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 200
 	return &proxier{
 		modifier:       modifier,
 		metricWriter:   metricWriter,
@@ -52,25 +52,47 @@ func (p *proxier) Proxy(rw http.ResponseWriter,
 	p.modifyProxyRequest(httpReq, req)
 	proxy := httputil.NewSingleHostReverseProxy(backendAddress)
 	proxy.Transport = NewRoundTripper(timeout, func(httpResp *http.Response, latency time.Duration, err error) (*http.Response, error) {
-		metric.ProxyLatency = latency
-		if err != nil {
-			metric.Error = err
-			resp := shared.NewErrorResponse(500, err)
-			metric.Response = resp
-			return p.errorResponse(err, req, resp)
+		var startTS time.Time
+		if httpResp == nil {
+			httpResp = &http.Response{
+				StatusCode: 500,
+			}
 		}
 
-		// modify the response with the modifier plugin and then copy
-		// the response back into the httpResp object
 		resp := shared.NewResponse(httpResp)
-		resp, err = p.modifier.ModifyResponse(req, resp)
+
 		if err != nil {
-			resp = shared.NewErrorResponse(500, err)
-			return p.errorResponse(err, req, resp)
+			startTS = time.Now()
+			resp, err = p.modifier.ModifyErrorResponse(err, req, resp)
+			metric.ErrorResponseModifierLatency = time.Now().Sub(startTS)
+			goto finished
+		}
+
+		// Attempt to modify the response
+		startTS = time.Now()
+		resp, err = p.modifier.ModifyResponse(req, resp)
+		metric.ResponseModifierLatency = time.Now().Sub(startTS)
+		if err != nil {
+			startTS = time.Now()
+			resp, err = p.modifier.ModifyErrorResponse(err, req, resp)
+			metric.ErrorResponseModifierLatency = time.Now().Sub(startTS)
+		}
+
+	finished:
+		metric.ProxyLatency = latency
+		metric.Response = resp
+		metric.Error = err
+		resp.Error = shared.NewError(err)
+
+		// in the rare case that a plugin failed and returned a nil
+		// response, create a generic ErrorResponse denoting an
+		// internal error
+		if resp == nil {
+			resp = shared.NewErrorResponse(500, InternalError)
 		}
 
 		p.responseToHTTPResponse(resp, httpResp)
-		return httpResp, nil
+		return httpResp, err
 	})
 
 	proxy.ServeHTTP(rw, httpReq)
@@ -87,33 +109,31 @@ func (p *proxier) modifyProxyRequest(httpReq *http.Request, req *shared.Request)
 	httpReq.Header = req.Header
 }
 
-func (p *proxier) responseToHTTPResponse(response *shared.Response, httpResp *http.Response) {
+func (p *proxier) responseToHTTPResponse(resp *shared.Response, httpResp *http.Response) {
+	// this should basically never happen, but if it does, then assume that
+	// that parent has handled it properly
+	if resp == nil || httpResp == nil {
+		return
+	}
+
 	// transform the local response back to an http.Response
-	httpResp.Status = response.Status
-	httpResp.StatusCode = response.StatusCode
-	httpResp.Proto = response.Proto
-	httpResp.ProtoMajor = response.ProtoMajor
-	httpResp.ProtoMinor = response.ProtoMinor
-	httpResp.Header = response.Header
-	httpResp.ContentLength = response.ContentLength
-	httpResp.TransferEncoding = response.TransferEncoding
-	httpResp.Close = response.Close
-	httpResp.Trailer = response.Trailer
+	httpResp.Status = resp.Status
+	httpResp.StatusCode = resp.StatusCode
+	httpResp.Proto = resp.Proto
+	httpResp.ProtoMajor = resp.ProtoMajor
+	httpResp.ProtoMinor = resp.ProtoMinor
+	httpResp.Header = resp.Header
+	httpResp.ContentLength = resp.ContentLength
+	httpResp.TransferEncoding = resp.TransferEncoding
+	httpResp.Close = resp.Close
+	httpResp.Trailer = resp.Trailer
 
-	// if the response plugin specified a response body, then we go ahead
-	// and override with it in the actual response
-	if response.Body != nil {
-		httpResp.Body = ioutil.NopCloser(bytes.NewReader(response.Body))
+	// if the plugin returns an override response, then go ahead and
+	// consume the entirety of the httpResponse's reader, and close it to
+	// prevent backing up the connection queue on the default transport.
+	if resp.Body != nil {
+		ioutil.ReadAll(httpResp.Body)
+		httpResp.Body.Close()
+		httpResp.Body = ioutil.NopCloser(bytes.NewReader(resp.Body))
 	}
-}
-
-func (p *proxier) errorResponse(err error, request *shared.Request, response *shared.Response) (*http.Response, error) {
-	_, err = p.modifier.ModifyErrorResponse(err, request, response)
-	if err != nil {
-		log.Println("ModifierPlugin.ErrorResponse method failed: ", err)
-	}
-
-	httpResp := &http.Response{}
-	p.responseToHTTPResponse(response, httpResp)
-	return httpResp, nil
 }
