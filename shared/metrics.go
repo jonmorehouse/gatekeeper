@@ -189,30 +189,18 @@ type RequestMetric struct {
 	// Latencies
 	Latency                time.Duration
 	InternalLatency        time.Duration // total local latency, including
-	PluginLatency          time.Duration // total latency making calls to RPC plugins
 	ProxyLatency           time.Duration // total latency actually proxying the request
 	UpstreamMatcherLatency time.Duration // total latency matching the request to an upstream
 
-	// Plugin Latency
-	LoadBalancerLatency     time.Duration
-	RequestModifierLatency  time.Duration
-	ResponseModifierLatency time.Duration
-
-	// proxy level latencies
-	BackendConnectLatency time.Duration
-	BackendRequestLatency time.Duration
-	BackendOverallLatency time.Duration
+	// Plugin Latencies
+	LoadBalancerLatency          time.Duration
+	RequestModifierLatency       time.Duration
+	ResponseModifierLatency      time.Duration
+	ErrorResponseModifierLatency time.Duration
 
 	// Any sort of error that could have been bubbled up throughout the
 	// request path
 	Error error
-
-	// Number of outstanding requests at the total,upstream and backend
-	// granularity. Specifically, this is the number of outstanding
-	// requests _at_ request time.
-	OutstandingRequestsCount         uint
-	OutstandingUpstreamRequestsCount uint
-	OutstandingBackendRequestsCount  uint
 }
 
 // UpstreamMetrics are useful for garnering granular metrics on particular

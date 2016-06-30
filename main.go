@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"log"
 	"os"
@@ -13,72 +12,142 @@ import (
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
-func parseJSONOpts(blob string) (map[string]interface{}, error) {
-	var opts map[string]interface{}
-	return opts, json.Unmarshal([]byte(blob), &opts)
+type stringValue struct {
+	value string
+}
+
+func (s *stringValue) Set(value string) error {
+	s.value = value
+	return nil
+}
+
+func (s *stringValue) String() string {
+	return s.value
+}
+
+func parseExtraFlags(args []string) []*flag.Flag {
+	flags := make([]*flag.Flag, 0, 0)
+
+	var current *flag.Flag
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") {
+			if current == nil {
+				log.Fatal(gatekeeper.InvalidPluginArgs)
+			}
+			current.Value.Set(arg)
+			continue
+		}
+
+		// if this is a flag and current is non-nil, then we need to create a new flag
+		if current != nil {
+			flags = append(flags, current)
+		}
+
+		pieces := strings.SplitN(arg, "=", 1)
+		current = &flag.Flag{
+			Name:  arg,
+			Value: &stringValue{},
+		}
+
+		if len(pieces) == 2 {
+			current.Value.Set(pieces[1])
+		}
+	}
+
+	if current != nil {
+		flags = append(flags, current)
+	}
+
+	return flags
+}
+
+func prefixedArgs(flags []*flag.Flag, prefix string) map[string]interface{} {
+	args := make(map[string]interface{})
+
+	for _, argFlag := range flags {
+		if !strings.HasPrefix(argFlag.Name, prefix) {
+			continue
+		}
+
+		key := strings.TrimLeft(argFlag.Name, prefix)
+		if argFlag.Value.String() == "" {
+			args[key] = struct{}{}
+		} else {
+			args[key] = argFlag.Value.String()
+		}
+	}
+	return args
 }
 
 func main() {
-	options := gatekeeper.Options{}
+	// plugin configuration
+	loadBalancerPlugin := flag.String("loadbalancer-plugin", "simple-loadbalancer", "loadbalancer-plugin cmd. default: simple-loadbalancer")
+	// accept comma delimited lists of plugins for metric, upstream and modifier plugins
+	upstreamPlugins := flag.String("upstream-plugins", "static-upstreams", "comma-delimited upstream-plugin cmds. default: static-upstreams")
+	metricPlugins := flag.String("metric-plugins", "metric-logger", "comma-delimited metric-plugin cmds. default: metric-plugins")
+	modifierPlugins := flag.String("modifier-plugins", "modifier", "comma-delimited modifier-plugin cmds. default: modifier-plugins")
 
-	// UpstreamPlugin configuration
-	upstreamPlugins := flag.String("upstream-plugins", "static-upstreams", "comma delimited list of plugin executables")
-	flag.UintVar(&options.UpstreamPluginsCount, "upstream-plugins-count", 1, "number of instances of each upstream plugin to operate")
-	upstreamPluginOpts := flag.String("upstream-plugins-opts", "{}", "json encoded options to be passed to each upstream plugin")
+	// server configuration
+	httpPublic := flag.Bool("http-public", true, "http-public enabled. default: true")
+	httpPublicPort := flag.Uint("http-public-port", 8000, "http-public listen port. default: 8000")
 
-	// LoadBalancerPlugin configuration
-	flag.StringVar(&options.LoadBalancerPlugin, "loadbalancer-plugin", "simple-loadbalancer", "name of loadbalancer plugin to use")
-	flag.UintVar(&options.LoadBalancerPluginsCount, "loadbalancer-plugins-count", 1, "number of instances of each loadbalancer plugin to operate")
-	loadBalancerPluginOpts := flag.String("loadbalancer-plugins-opts", "{}", "json encoded options to be passed to each loadbalancer plugin")
+	httpInternal := flag.Bool("http-internal", false, "http-internal enabled. default: false")
+	httpInternalPort := flag.Uint("http-internal-port", 8001, "http-public listen port. default: 8001")
 
-	// MetricsPlugins configuration
-	metricPlugins := flag.String("metric-plugins", "metric-logger", "comma delimited list of metric plugin executables. default: metric-logger")
-	flag.UintVar(&options.MetricPluginsCount, "metric-plugins-count", 1, "number of instances of each metric plugin to operate")
-	metricPluginOpts := flag.String("metric-plugins-opts", "{}", "json encoded options to be passed to each metric plugin")
+	httpsPublic := flag.Bool("https-public", false, "https-public enabled. default: false")
+	httpsPublicPort := flag.Uint("https-public-port", 443, "http-public listen port. default: 443")
 
-	// modifierPlugin configuration
-	modifierPlugins := flag.String("modifier-plugins", "modifier", "comma delimited list of modifier plugin executables. default: modifier")
-	flag.UintVar(&options.ModifierPluginsCount, "modifier-plugins-count", 1, "number of instances of each modifier plugin to operate")
-	modifierPluginOpts := flag.String("modifier-plugins-opts", "{}", "json encoded options to be passed to each modifier plugin")
+	httpsInternal := flag.Bool("https-internal", false, "https-internal false")
+	httpsInternalPort := flag.Uint("https-internal-port", 444, "http-internal listen port. default: 444")
 
-	// Configure Listen Ports for different protocols
-	flag.UintVar(&options.HTTPPublicPort, "http-public-port", 8000, "listen port for http-public traffic. default: 8000")
-	flag.UintVar(&options.HTTPInternalPort, "http-internal-port", 8001, "listen port for http-internal traffic. default: 8001")
+	// configure both a plugin and request timeout
+	pluginTimeoutStr := flag.String("plugin-timeout", "10ms", "plugin call timeout. default 10ms")
+	proxyTimeoutStr := flag.String("default-proxy-timeout", "5s", "default proxy request timeout, for when an upstream doesn't declare one. default: 5s")
 
-	defaultTimeoutSeconds := flag.Uint("default-timeout", 10, "default-timeout in seconds. default: 10s")
+	commandLine := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	commandLine.Parse(os.Args)
+	extraFlags := parseExtraFlags(commandLine.Args()[1:])
 
-	flag.Parse()
-
-	// parse flags into the correct gatekeeper.Options attributes
-	var err error
-
-	// validate upstream plugin options
-	options.UpstreamPlugins = strings.Split(*upstreamPlugins, ",")
-	options.UpstreamPluginOpts, err = parseJSONOpts(*upstreamPluginOpts)
+	pluginTimeout, err := time.ParseDuration(*pluginTimeoutStr)
 	if err != nil {
-		log.Fatal("Invalid JSON for upstream-plugin-opts")
+		log.Fatal(gatekeeper.InvalidPluginTimeoutError)
+		return
 	}
 
-	// validate load balancer plugin configuration
-	options.LoadBalancerPluginOpts, err = parseJSONOpts(*loadBalancerPluginOpts)
+	proxyTimeout, err := time.ParseDuration(*proxyTimeoutStr)
 	if err != nil {
-		log.Fatal("Invalid JSON for loadbalancer-plugin-opts")
+		log.Fatal(gatekeeper.InvalidProxyTimeoutError)
+		return
 	}
 
-	// validate event plugin configuration
-	options.MetricPlugins = strings.Split(*metricPlugins, ",")
-	options.MetricPluginOpts, err = parseJSONOpts(*metricPluginOpts)
-	if err != nil {
-		log.Fatal("Invalid JSON for metric-plugin-opts")
-	}
+	options := gatekeeper.Options{
+		UpstreamPlugins:    strings.Split(*upstreamPlugins, ","),
+		UpstreamPluginArgs: prefixedArgs(extraFlags, "-upstream-"),
 
-	options.ModifierPlugins = strings.Split(*modifierPlugins, ",")
-	options.ModifierPluginOpts, err = parseJSONOpts(*modifierPluginOpts)
-	if err != nil {
-		log.Fatal("Invalid JSON for response-plugin-opts")
-	}
+		MetricPlugins:    strings.Split(*metricPlugins, ","),
+		MetricPluginArgs: prefixedArgs(extraFlags, "-metric-"),
 
-	options.DefaultTimeout = time.Second * time.Duration(*defaultTimeoutSeconds)
+		ModifierPlugins:    strings.Split(*modifierPlugins, ","),
+		ModifierPluginArgs: prefixedArgs(extraFlags, "-modifier-"),
+
+		LoadBalancerPlugin:     *loadBalancerPlugin,
+		LoadBalancerPluginArgs: prefixedArgs(extraFlags, "-loadbalancer-"),
+
+		HTTPPublic:     *httpPublic,
+		HTTPPublicPort: *httpPublicPort,
+
+		HTTPInternal:     *httpInternal,
+		HTTPInternalPort: *httpInternalPort,
+
+		HTTPSPublic:     *httpsPublic,
+		HTTPSPublicPort: *httpsPublicPort,
+
+		HTTPSInternal:     *httpsInternal,
+		HTTPSInternalPort: *httpsInternalPort,
+
+		DefaultProxyTimeout: proxyTimeout,
+		PluginTimeout:       pluginTimeout,
+	}
 
 	// build the server application which manages multiple servers
 	// listening on multiple ports.
@@ -93,12 +162,10 @@ func main() {
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 		<-signals
-		log.Println("Caught a signal...")
 		// by default, we give 10 seconds for the app to shut down gracefully
 		if err := app.Stop(time.Second * 10); err != nil {
 			log.Fatal(err)
 		}
-		log.Println("Successfully shutdown application")
 		stopCh <- struct{}{}
 	}()
 

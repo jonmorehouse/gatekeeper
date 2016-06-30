@@ -1,4 +1,4 @@
-package event
+package metric
 
 import (
 	"net/rpc"

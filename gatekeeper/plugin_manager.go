@@ -41,15 +41,15 @@ type pluginManager struct {
 	instances []Plugin
 }
 
-func NewPluginManager(pluginCmd string, opts map[string]interface{}, count uint, pluginType PluginType, metricWriter MetricWriterClient) PluginManager {
+func NewPluginManager(pluginCmd string, opts map[string]interface{}, pluginType PluginType, metricWriter MetricWriterClient) PluginManager {
 	return &pluginManager{
 		metricWriter: metricWriter,
 		pluginType:   pluginType,
 		pluginCmd:    pluginCmd,
 		pluginName:   filepath.Base(pluginCmd),
 		opts:         opts,
-		count:        count,
-		instances:    make([]Plugin, 0, count),
+		count:        1,
+		instances:    make([]Plugin, 0, 1),
 	}
 }
 

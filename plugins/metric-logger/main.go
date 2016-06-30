@@ -34,11 +34,11 @@ func (*Plugin) PluginMetric(metric *shared.PluginMetric) error {
 }
 
 func (*Plugin) RequestMetric(metric *shared.RequestMetric) error {
-	log.Println("Latency: ", metric.Latency)
+	log.Println("OverallLatency: ", metric.Latency)
 	log.Println("InternalLatency: ", metric.InternalLatency)
-	log.Println("PluginLatency: ", metric.PluginLatency)
 	log.Println("ProxyLatency: ", metric.ProxyLatency)
 	log.Println("RequestModifierLatency: ", metric.RequestModifierLatency)
+	log.Println("LoadBalancerLatency: ", metric.LoadBalancerLatency)
 	log.Println("ResponseModifierLatency: ", metric.ResponseModifierLatency)
 	return nil
 }
