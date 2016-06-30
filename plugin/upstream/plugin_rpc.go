@@ -131,7 +131,7 @@ type PluginRPCClient struct {
 
 // Configure the client and the server. Specifically, this requires that a Manager is passed in here
 func (c *PluginRPCClient) Configure(opts map[string]interface{}) *shared.Error {
-	rawManager, ok := opts["manager"]
+	rawManager, ok := opts["_manager"]
 	if !ok {
 		return shared.NewError(fmt.Errorf("No manager was passed into the rpc client"))
 	}
@@ -140,7 +140,7 @@ func (c *PluginRPCClient) Configure(opts map[string]interface{}) *shared.Error {
 		return shared.NewError(fmt.Errorf("Manager was passed in, but it was not successfully cast to a Manager type"))
 	} else {
 		c.manager = manager
-		delete(opts, "manager")
+		delete(opts, "_manager")
 	}
 
 	callArgs := ConfigureArgs{

@@ -1,4 +1,4 @@
-package gatekeeper
+package metric
 
 import (
 	"encoding/gob"

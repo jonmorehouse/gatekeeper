@@ -17,21 +17,33 @@ type Server interface {
 }
 
 type ProxyServer struct {
-	port            uint
-	protocol        shared.Protocol
+	port     uint
+	protocol shared.Protocol
+
 	upstreamMatcher UpstreamMatcherClient
 	loadBalancer    LoadBalancerClient
 	modifier        Modifier
 	metricWriter    MetricWriter
+	proxier         Proxier
 
-	stopAccepting bool
+	stopAccepting     bool
+	stopCh            chan struct{}
+	stoppedCh         chan struct{}
+	errCh             chan error
+	requestStartedCh  chan struct{}
+	requestFinishedCh chan struct{}
 
 	httpServer *graceful.Server
-	proxier    Proxier
-	errCh      chan error
 }
 
 func (s *ProxyServer) Start() error {
+	// start the metric worker for tracking current requests
+	s.requestStartedCh = make(chan struct{}, 1000)
+	s.requestFinishedCh = make(chan struct{}, 1000)
+	s.stopCh = make(chan struct{}, 1)
+	s.stoppedCh = make(chan struct{}, 1)
+	go s.metricWorker()
+
 	s.eventMetric(shared.ServerStartedEvent)
 	return s.startHTTP()
 }
@@ -44,6 +56,8 @@ func (s *ProxyServer) StopAccepting() error {
 func (s *ProxyServer) Stop(duration time.Duration) error {
 	s.eventMetric(shared.ServerStoppedEvent)
 	s.httpServer.Stop(duration)
+	s.stopCh <- struct{}{}
+	<-s.stoppedCh
 	return <-s.errCh
 }
 
@@ -87,6 +101,7 @@ finished:
 
 func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	start := time.Now()
+	s.requestStartedCh <- struct{}{}
 	req := shared.NewRequest(rawReq, s.protocol)
 
 	metric := &shared.RequestMetric{
@@ -99,6 +114,7 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 	// finish the request metric, and emit it to the MetricWriter at the
 	// end of this function, after the response has been written
 	defer func(metric *shared.RequestMetric) {
+		s.requestFinishedCh <- struct{}{}
 		metric.Timestamp = time.Now()
 		metric.RequestEndTS = time.Now()
 		metric.Latency = time.Now().Sub(start)
@@ -177,7 +193,7 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 	// proxy error in the proxy lifecycle is handled internally, due to the
 	// coupling that is required with the internal go httputil.ReverseProxy
 	// and http.Transport types
-	if err := s.proxier.Proxy(rw, rawReq, req, backend, metric); err != nil {
+	if err := s.proxier.Proxy(rw, rawReq, req, upstream, backend, metric); err != nil {
 		resp := shared.NewErrorResponse(500, err)
 		metric.Response = resp
 		metric.Error = err
@@ -225,4 +241,31 @@ func (s *ProxyServer) eventMetric(event shared.MetricEvent) {
 		Event:     event,
 		Timestamp: time.Now(),
 	})
+}
+
+func (s *ProxyServer) metricWorker() {
+	defer func() {
+		s.stoppedCh <- struct{}{}
+	}()
+
+	outstanding := 0
+
+	cb := func() {
+		log.Println("current outstanding requests: ", outstanding)
+	}
+
+	tickCh := time.NewTicker(time.Millisecond * 100).C
+	for {
+		select {
+		case <-s.requestStartedCh:
+			outstanding += 1
+		case <-s.requestFinishedCh:
+			outstanding -= 1
+		case <-tickCh:
+			cb()
+		case <-s.stopCh:
+			cb()
+			return
+		}
+	}
 }

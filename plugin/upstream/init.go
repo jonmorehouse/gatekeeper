@@ -1,4 +1,4 @@
-package gatekeeper
+package upstream
 
 import (
 	"encoding/gob"

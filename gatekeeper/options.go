@@ -1,93 +1,85 @@
 package gatekeeper
 
 import (
-	"fmt"
+	"errors"
 	"os/exec"
+	"strings"
 	"time"
 )
+
+var UpstreamPluginRequiredError = errors.New("upstream-plugin required")
+var MetricPluginRequiredError = errors.New("metric-plugin required")
+var ModifierPluginRequiredError = errors.New("modifier-plugin required")
+var LoadbalancerPluginRequiredError = errors.New("loadbalancer-plugin required")
+
+var InvalidUpstreamPluginError = errors.New("invalid upstream-plugin")
+var InvalidMetricPluginError = errors.New("invalid upstream-plugin")
+var InvalidModifierPluginError = errors.New("invalid upstream-plugin")
+var InvalidLoadbalancerPluginError = errors.New("invalid upstream-plugin")
+
+var InvalidPluginArgs = errors.New("invalid plugin args")
+
+var InvalidPluginTimeoutError = errors.New("invalid plugin-timeout")
+var InvalidProxyTimeoutError = errors.New("invalid proxy-timeout")
 
 type Options struct {
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	UpstreamPlugins []string
-	// number of instances to run
-	UpstreamPluginsCount uint
-	// Opts to be passed along to plugin. Not currently used
-	UpstreamPluginOpts map[string]interface{}
+	UpstreamPlugins    []string
+	UpstreamPluginArgs map[string]interface{}
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	LoadBalancerPlugin string
-	// number of instances to run of the loadBalancer
-	LoadBalancerPluginsCount uint
-	// Opts to be passed along to plugin. Not currently used
-	LoadBalancerPluginOpts map[string]interface{}
+	LoadBalancerPlugin     string
+	LoadBalancerPluginArgs map[string]interface{}
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `modifier` or `/home/foo/bin/modifier`
-	ModifierPlugins []string
-	// number of instances to run
-	ModifierPluginsCount uint
-	// Opts to be passed along to plugin. Not currently used
-	ModifierPluginOpts map[string]interface{}
+	ModifierPlugins    []string
+	ModifierPluginArgs map[string]interface{}
 
 	// name of the plugin binary, expects a full path or the name of a
 	// binary in PATH eg: `event` or `/home/foo/bin/event`
-	MetricPlugins []string
-	// number of instances to run
-	MetricPluginsCount uint
-	// Opts to be passed along to plugin. Not currently used
-	MetricPluginOpts map[string]interface{}
+	MetricPlugins    []string
+	MetricPluginArgs map[string]interface{}
 
-	// Ports to start servers listening on. If not provided, the server
-	// will not be started. If collisions are detected, then this will
-	// error out.
-	HTTPPublicPort   uint
+	// server configurations
+	HTTPPublic     bool
+	HTTPPublicPort uint
+
+	HTTPInternal     bool
 	HTTPInternalPort uint
 
+	HTTPSPublic     bool
+	HTTPSPublicPort uint
+
+	HTTPSInternal     bool
+	HTTPSInternalPort uint
+
 	// Default timeout for upstream requests
-	DefaultTimeout time.Duration
+	DefaultProxyTimeout time.Duration
+	PluginTimeout       time.Duration
 }
 
-func ValidatePlugins(paths []string) ([]string, error) {
-	errs := NewMultiError()
-	validPaths := make([]string, 0, len(paths))
+func ValidatePlugins(rawCmds []string) ([]string, error) {
+	cmds := make([]string, len(rawCmds))
 
-	for _, path := range paths {
-		if fullpath, err := exec.LookPath(path); err != nil {
-			errs.Add(err)
-		} else {
-			validPaths = append(validPaths, fullpath)
+	for idx, cmd := range rawCmds {
+		pieces := strings.SplitN(cmd, " ", 1)
+		fullpath, err := exec.LookPath(pieces[0])
+		if err != nil {
+			return []string(nil), err
 		}
+
+		pieces[0] = fullpath
+		cmds[idx] = strings.Join(pieces, " ")
 	}
 
-	return validPaths, errs.ToErr()
+	return cmds, nil
 }
 
 func (o *Options) Validate() error {
 	errs := NewMultiError()
-
-	// verify that Upstream plugins are configured correctly
-	if plugins, err := ValidatePlugins(o.UpstreamPlugins); err != nil {
-		errs.Add(err)
-	} else {
-		o.UpstreamPlugins = plugins
-	}
-	if o.UpstreamPluginsCount == 0 {
-		return fmt.Errorf("UPSTREAM_PLUGIN_COUNT_ZERO")
-	}
-
-	if fullpath, err := exec.LookPath(o.LoadBalancerPlugin); err != nil {
-		errs.Add(err)
-	} else {
-		o.LoadBalancerPlugin = fullpath
-	}
-
-	if o.LoadBalancerPluginsCount == 0 {
-		return fmt.Errorf("LOAD_BALANCER_PLUGIN_COUNT_ZERO")
-	}
-
-	// TODO handle event and modifier plugins
 
 	return errs.ToErr()
 }

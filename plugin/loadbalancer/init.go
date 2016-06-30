@@ -1,4 +1,4 @@
-package gatekeeper
+package loadbalancer
 
 import (
 	"encoding/gob"

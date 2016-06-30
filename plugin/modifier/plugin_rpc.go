@@ -1,4 +1,4 @@
-package request
+package modifier
 
 import (
 	"net/rpc"
