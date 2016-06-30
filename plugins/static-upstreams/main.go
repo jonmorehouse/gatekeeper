@@ -8,9 +8,9 @@ import (
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-type StaticUpstreams struct {
-	manager upstream_plugin.Manager
-	stopCh  chan struct{}
+type staticUpstreams struct {
+	//
+
 }
 
 func (s *StaticUpstreams) Configure(map[string]interface{}) error {
