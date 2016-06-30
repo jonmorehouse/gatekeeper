@@ -35,6 +35,7 @@ func (l *LoadBalancer) Stop() error {
 }
 func (l *LoadBalancer) Configure(opts map[string]interface{}) error {
 	log.Println("configuring simple-loadbalancer ...")
+	log.Println(opts)
 	return nil
 }
 func (l *LoadBalancer) Heartbeat() error { return nil }

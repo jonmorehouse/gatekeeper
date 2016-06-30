@@ -35,7 +35,7 @@ func New(options Options) (*App, error) {
 	metricPlugins := make([]PluginManager, len(options.MetricPlugins), len(options.MetricPlugins))
 	metricWriter := NewMetricWriter(metricPlugins)
 	for idx, pluginCmd := range options.MetricPlugins {
-		plugin := NewPluginManager(pluginCmd, options.MetricPluginOpts, options.MetricPluginsCount, MetricPlugin, metricWriter)
+		plugin := NewPluginManager(pluginCmd, options.MetricPluginArgs, MetricPlugin, metricWriter)
 		metricPlugins[idx] = plugin
 	}
 
@@ -55,10 +55,10 @@ func New(options Options) (*App, error) {
 	// requires an UpstreamPublisher which is cast as an
 	// upstream_plugin.Manager to be accessible for calling back into the
 	// parent program.
-	upstreamPlugins := make([]PluginManager, 0, len(options.UpstreamPlugins))
-	for _, pluginCmd := range options.UpstreamPlugins {
-		plugin := NewPluginManager(pluginCmd, options.UpstreamPluginOpts, options.UpstreamPluginsCount, UpstreamPlugin, metricWriter)
-		upstreamPlugins = append(upstreamPlugins, plugin)
+	upstreamPlugins := make([]PluginManager, len(options.UpstreamPlugins), len(options.UpstreamPlugins))
+	for idx, pluginCmd := range options.UpstreamPlugins {
+		plugin := NewPluginManager(pluginCmd, options.UpstreamPluginArgs, UpstreamPlugin, metricWriter)
+		upstreamPlugins[idx] = plugin
 	}
 
 	// the upstreamPublisher needs to know about each pluginManager and in
@@ -67,10 +67,11 @@ func New(options Options) (*App, error) {
 	// RPCServer that is launched inside of each RPCClient uses to emit
 	// messages too
 	upstreamPublisher := NewUpstreamPublisher(upstreamPlugins, broadcaster, metricWriter)
+
 	// when the upstream plugins are configured, the publisher gets passed
 	// to them and used as the manager type. This allows the upstreamPlugin
 	// to talk back into this parent process.
-	options.UpstreamPluginOpts["manager"] = upstreamPublisher
+	options.UpstreamPluginArgs["_manager"] = upstreamPublisher
 
 	// build an upstreamMatcher for each server to communicate to the
 	// upstream store. This is used to find the correct upstream for each
@@ -80,15 +81,15 @@ func New(options Options) (*App, error) {
 	// only one loadbalancer plugin is permitted, this is to ensure that we
 	// actually have sane load balancing! Otherwise, we run the risk of
 	// having multiple different load balancing algorithms at once.
-	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginOpts, options.LoadBalancerPluginsCount, LoadBalancerPlugin, metricWriter)
+	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginArgs, LoadBalancerPlugin, metricWriter)
 	loadBalancer := NewLoadBalancer(broadcaster, loadBalancerPlugin)
 
 	// for each specified Modifier plugin, we create a PluginManager which
 	// manages the lifecycle of the plugin.
-	modifierPlugins := make([]PluginManager, 0, len(options.ModifierPlugins))
-	for _, pluginCmd := range options.ModifierPlugins {
-		plugin := NewPluginManager(pluginCmd, options.ModifierPluginOpts, options.ModifierPluginsCount, ModifierPlugin, metricWriter)
-		modifierPlugins = append(modifierPlugins, plugin)
+	modifierPlugins := make([]PluginManager, len(options.ModifierPlugins), len(options.ModifierPlugins))
+	for idx, pluginCmd := range options.ModifierPlugins {
+		plugin := NewPluginManager(pluginCmd, options.ModifierPluginArgs, ModifierPlugin, metricWriter)
+		modifierPlugins[idx] = plugin
 	}
 
 	// modifier is a type that wraps a series of modifier plugins and is
