@@ -130,13 +130,11 @@ func (p *UpstreamPublisher) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	p.upstreamMetric(shared.UpstreamRemovedEvent, upstream, nil)
 
 	delete(p.knownUpstreams, upstreamID)
-	err := p.broadcaster.Publish(UpstreamEvent{
+	// TODO refactor this to handle errors once the upstreamPublisher / pipeline is refactored
+	p.broadcaster.Publish(UpstreamEvent{
 		EventType:  UpstreamRemoved,
 		UpstreamID: upstreamID,
 	})
-	if err != nil {
-		return InternalBroadcastError
-	}
 	return nil
 }
 
@@ -150,6 +148,7 @@ func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend *sh
 		return UpstreamNotFoundError
 	}
 
+	p.knownBackends[backend.ID] = backend
 	p.eventMetric(shared.BackendAddedEvent)
 	p.upstreamMetric(shared.BackendAddedEvent, upstream, backend)
 
@@ -169,6 +168,7 @@ func (p *UpstreamPublisher) AddBackend(upstreamID shared.UpstreamID, backend *sh
 func (p *UpstreamPublisher) RemoveBackend(backendID shared.BackendID) error {
 	p.Lock()
 	defer p.Unlock()
+
 	backend, ok := p.knownBackends[backendID]
 	if !ok {
 		p.eventMetric(shared.PluginErrorEvent)
@@ -178,13 +178,11 @@ func (p *UpstreamPublisher) RemoveBackend(backendID shared.BackendID) error {
 	p.eventMetric(shared.BackendRemovedEvent)
 	p.upstreamMetric(shared.BackendRemovedEvent, nil, backend)
 
-	err := p.broadcaster.Publish(UpstreamEvent{
+	// TODO: enable error handling here
+	p.broadcaster.Publish(UpstreamEvent{
 		EventType: BackendRemoved,
 		BackendID: backendID,
 	})
-	if err != nil {
-		return InternalBroadcastError
-	}
 	return nil
 }
 
