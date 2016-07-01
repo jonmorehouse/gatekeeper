@@ -31,20 +31,28 @@ echo "building shared package ..."
 cd "$DIR/shared"
 go build .
 
-echo "building plugin/upstream package ..."
-cd "$DIR/plugin/upstream"
-go build .
-
-echo "building plugin/loadbalancer package ..."
-cd "$DIR/plugin/loadbalancer"
+echo "building internal package ..."
+cd "$DIR/internal"
 go build .
 
 echo "building plugin/event package ..."
 cd "$DIR/plugin/metric"
 go build .
 
+echo "building plugin/loadbalancer package ..."
+cd "$DIR/plugin/loadbalancer"
+go build .
+
 echo "build plugin/modifier package ..."
 cd "$DIR/plugin/modifier"
+go build .
+
+echo "build plugin/router package ..."
+cd "$DIR/plugin/router"
+go build .
+
+echo "building plugin/upstream package ..."
+cd "$DIR/plugin/upstream"
 go build .
 
 echo "building gatekeeper core package ..."
