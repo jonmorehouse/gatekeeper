@@ -43,9 +43,9 @@ func parseExtraFlags(args []string) []*flag.Flag {
 			flags = append(flags, current)
 		}
 
-		pieces := strings.SplitN(arg, "=", 1)
+		pieces := strings.SplitN(arg, "=", 2)
 		current = &flag.Flag{
-			Name:  arg,
+			Name:  pieces[0],
 			Value: &stringValue{},
 		}
 

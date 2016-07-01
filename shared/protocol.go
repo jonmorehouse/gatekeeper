@@ -34,3 +34,17 @@ func NewProtocol(value string) (Protocol, error) {
 
 	return Protocol(0), fmt.Errorf("unknown protocol")
 }
+
+func NewProtocols(values []string) ([]Protocol, error) {
+	protocols := make([]Protocol, len(values))
+	for idx, value := range values {
+		protocol, err := NewProtocol(value)
+		if err != nil {
+			return []Protocol(nil), err
+		}
+		protocols[idx] = protocol
+
+	}
+
+	return protocols, nil
+}

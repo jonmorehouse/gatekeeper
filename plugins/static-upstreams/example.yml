@@ -1,0 +1,26 @@
+---
+httpbin: 
+  name: httpbin
+  timeout: 5s
+  protocols:
+    - http-internal
+    - http-public
+  hostnames:
+    - httpbin
+    - httpbin.org
+  prefixes:
+    - httpbin
+  backends:
+    - https://httpbin.org
+    - https://httpbin.org
+
+localhost:
+  name: localhost
+  timeout: 10ms
+  protocols:
+    - http-internal
+    - http-public
+  prefixes:
+    - localhost
+  backends:
+    - http://127.0.0.1:8080
