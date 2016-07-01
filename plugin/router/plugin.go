@@ -28,7 +28,7 @@ type Plugin interface {
 	// make any opinions on which backend that is desired. Users whom would
 	// like to route to a specific backend would most likely need to create
 	// their own loadbalancer plugin in unison as well.
-	RouteRequest(*shared.Request) (*shared.Upstream, error)
+	RouteRequest(*shared.Request) (*shared.Upstream, *shared.Request, error)
 }
 
 // PluginClient in this case is the gatekeeper/core application. PluginClient
@@ -40,7 +40,7 @@ type PluginClient interface {
 
 	AddUpstream(*shared.Upstream) error
 	RemoveUpstream(shared.UpstreamID) error
-	RouteRequest(*shared.Request) (*shared.Upstream, error)
+	RouteRequest(*shared.Request) (*shared.Upstream, *shared.Request, error)
 }
 
 func NewPluginClient(rpcClient *RPCClient) PluginClient {
@@ -63,6 +63,6 @@ func (p *pluginClient) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	return p.pluginRPC.RemoveUpstream(upstreamID)
 }
 
-func (p *pluginClient) RouteRequest(req *shared.Request) (*shared.Upstream, error) {
+func (p *pluginClient) RouteRequest(req *shared.Request) (*shared.Upstream, *shared.Request, error) {
 	return p.pluginRPC.RouteRequest(req)
 }

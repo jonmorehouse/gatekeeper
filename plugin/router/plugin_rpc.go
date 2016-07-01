@@ -27,6 +27,7 @@ type routeRequestArgs struct {
 }
 type routeRequestResp struct {
 	Upstream *shared.Upstream
+	Req      *shared.Request
 	Err      *shared.Error
 }
 
@@ -66,17 +67,17 @@ func (c *RPCClient) RemoveUpstream(upstreamID shared.UpstreamID) *shared.Error {
 	return resp.Err
 }
 
-func (c *RPCClient) RouteRequest(req *shared.Request) (*shared.Upstream, *shared.Error) {
+func (c *RPCClient) RouteRequest(req *shared.Request) (*shared.Upstream, *shared.Request, *shared.Error) {
 	args := &routeRequestArgs{
 		Req: req,
 	}
 	resp := &routeRequestResp{}
 
 	if err := c.client.Call("Plugin.RouteRequest", args, resp); err != nil {
-		return nil, shared.NewError(err)
+		return nil, args.Req, shared.NewError(err)
 	}
 
-	return resp.Upstream, resp.Err
+	return resp.Upstream, resp.Req, resp.Err
 
 }
 
@@ -102,11 +103,12 @@ func (s *RPCServer) RemoveUpstream(args *removeUpstreamArgs, resp *removeUpstrea
 }
 
 func (s *RPCServer) RouteRequest(args *routeRequestArgs, resp *routeRequestResp) error {
-	upstream, err := s.impl.RouteRequest(args.Req)
+	upstream, req, err := s.impl.RouteRequest(args.Req)
 	if err != nil {
 		resp.Err = shared.NewError(err)
 		return nil
 	}
 	resp.Upstream = upstream
+	resp.Req = req
 	return nil
 }
