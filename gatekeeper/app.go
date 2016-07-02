@@ -16,18 +16,20 @@ type App struct {
 	// the server type adheres to the startStop interface, by convenience.
 	servers []Server
 
-	metricWriter      MetricWriter
-	broadcaster       EventBroadcaster
-	upstreamPublisher *UpstreamPublisher
-	upstreamMatcher   UpstreamMatcher
-	modifier          Modifier
-	loadBalancer      LoadBalancer
+	metricWriter    MetricWriter
+	broadcaster     EventBroadcaster
+	upstreamManager UpstreamManager
+	upstreamMatcher UpstreamMatcher
+	modifier        Modifier
+	loadBalancer    LoadBalancer
 }
 
 func New(options Options) (*App, error) {
 	if err := options.Validate(); err != nil {
 		return nil, err
 	}
+
+	metricPlugins := BuildMetricPlugins()
 
 	// MetricWriter is a wrapper around a series of Event plugins which is
 	// used by various processes around teh application to emit metrics and
@@ -83,6 +85,8 @@ func New(options Options) (*App, error) {
 	// having multiple different load balancing algorithms at once.
 	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginArgs, LoadBalancerPlugin, metricWriter)
 	loadBalancer := NewLoadBalancer(broadcaster, loadBalancerPlugin)
+
+	router := NewPluginManager(options.RouterPlugin, options.RouterPluginArgs, RouterPlugin, metricWriter)
 
 	// for each specified Modifier plugin, we create a PluginManager which
 	// manages the lifecycle of the plugin.

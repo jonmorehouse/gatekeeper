@@ -2,73 +2,40 @@ package gatekeeper
 
 import (
 	"bytes"
+	"errors"
 	"sync"
-
-	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-// internal-error represents a set of errors for capturing irregular behaviour
-// inside of the gatekeeper core application.
-type internalError uint
+var InternalError = errors.New("internal error")
 
-const (
-	// internal errors that should not happen
-	InternalError internalError = iota + 1
-	InternalPluginError
-	InternalTimeoutError
-	InternalEventError
-	InternalProxierError
-	InternalBroadcastError
+var PluginTimeoutError = errors.New("plugin timeout error")
+var InternalPluginError = errors.New("internal plugin error")
+var InternalTimeoutError = errors.New("internal timeout error")
+var InternalBroadcastError = errors.New("internal broadcast error")
+var InternalEventListenerError = errors.New("internal event listener error")
+var InvalidEventError = errors.New("invalid event error")
+var UnsubscribedEventError = errors.New("unsubscribed event error")
+var RouteNotFoundError = errors.New("No route found error")
+var InvalidUpstreamEventErr = errors.New("invalid upstream event")
 
-	// ConfigurationError
-	ConfigurationError
+var ConfigurationError = errors.New("invalid configuration")
 
-	// Request Lifecycle Errors
-	ResponseWriteError
-	ServerShuttingDownError
-	UpstreamNotFoundError
-	BackendNotFoundError
-	ProxyTimeoutError
-	NoBackendsFoundError
-	BackendAddressError
+var ServerShuttingDownError = errors.New("server shutting down")
+var ResponseWriteError = errors.New("response write error")
 
-	// PluginErrors
-	LoadBalancerPluginError
-	ModifierPluginError
-)
+var UpstreamNotFoundError = errors.New("upstream not found")
+var UpstreamDuplicateIDError = errors.New("duplicate upstream ID error")
 
-var internalErrorMapping = map[internalError]string{
-	InternalError:          "internal error",
-	InternalPluginError:    "internal plugin error",
-	InternalTimeoutError:   "internal timeout error",
-	InternalEventError:     "internal event error",
-	InternalBroadcastError: "internal broadcast error",
+var BackendDuplicateIDError = errors.New("duplicate backend ID error")
+var BackendNotFoundError = errors.New("backend not found")
+var BackendAddressError = errors.New("invalid backend address error")
+var NoBackendsFoundError = errors.New("no upstream backends found")
+var OrphanedBackendError = errors.New("orphaned backend error")
 
-	ConfigurationError: "invalid configuration",
-
-	ServerShuttingDownError: "server shutting down",
-	ResponseWriteError:      "response write error",
-	UpstreamNotFoundError:   "upstream not found",
-	BackendNotFoundError:    "backend not found",
-	BackendAddressError:     "backend address error",
-	NoBackendsFoundError:    "no upstream backends found",
-	InternalProxierError:    "internal proxier error",
-	LoadBalancerPluginError: "load balancer plugin error",
-	ModifierPluginError:     "modifier plugin error",
-	ProxyTimeoutError:       "proxy timeout error",
-}
-
-func (i internalError) String() string {
-	desc, ok := internalErrorMapping[i]
-	if !ok {
-		shared.ProgrammingError("internalError string mapping not found")
-	}
-	return desc
-}
-
-func (i internalError) Error() string {
-	return i.String()
-}
+var InternalProxierError = errors.New("internal proxier error")
+var LoadBalancerPluginError = errors.New("load balancer plugin error")
+var ModifierPluginError = errors.New("modifier plugin error")
+var ProxyTimeoutError = errors.New("proxy timeout error")
 
 // goroutine safe error implementing type for managing multiple errors
 type MultiError struct {

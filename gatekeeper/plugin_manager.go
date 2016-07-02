@@ -1,227 +1,279 @@
 package gatekeeper
 
 import (
-	"math/rand"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
-
-	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
-	metric_plugin "github.com/jonmorehouse/gatekeeper/plugin/metric"
-	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
-	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
-	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 type PluginManager interface {
-	// start all plugins, running them in the background...
 	Start() error
-	// stop all instances of the plugin
 	Stop(time.Duration) error
 
-	// fetches a reference to a plugin
-	Get() (Plugin, error)
+	// Call a method on the plugin instance with additional robustness and
+	// metrics emitted to the metricWriter. This supports retries and
+	// timeouts, by default timing out a call based upon the configured
+	// timeout
+	Call(string, func(Plugin) error) error
 
-	// fetch all references to all plugins
-	All() ([]Plugin, error)
+	// Grab a plugin under the readLock, under normal circumstances, we
+	// most likely wouldn't do anything substantial here. MetricWriter uses
+	// it for type switching to see which metrics to pass along
+	Grab(func(Plugin)) Plugin
+}
 
-	// emit a PluginMetric to the the metricWriter
-	WriteMetric(string, time.Duration, error)
+func NewPluginManager(cmd string, args map[string]interface{}, pluginType PluginType, broadcaster EventBroadcaster, metricWriter MetricWriterClient) PluginManager {
+	pluginName := filepath.Base(strings.SplitN(cmd, " ", 2)[0])
+
+	return &pluginManager{
+		metricWriter: metricWriter,
+
+		pluginType: pluginType,
+		pluginName: pluginName,
+		pluginCmd:  pluginCmd,
+		pluginArgs: pluginArgs,
+
+		instance: nil,
+		workers:  0,
+
+		callTimeout: time.Millisecond * 5,
+		callRetries: 3,
+
+		stopCh: make(chan struct{}),
+		doneCh: make(chan struct{}),
+	}
 }
 
 type pluginManager struct {
 	metricWriter MetricWriterClient
-	pluginType   PluginType
-	pluginName   string
-	pluginCmd    string
-	opts         map[string]interface{}
+	broadcaster  EventBroadcaster
 
-	// count is the number of instances that this manager should manage for this plugin
-	count     uint
-	instances []Plugin
-}
+	pluginType PluginType
+	pluginName string
+	pluginCmd  string
+	pluginArgs map[string]interface{}
 
-func NewPluginManager(pluginCmd string, opts map[string]interface{}, pluginType PluginType, metricWriter MetricWriterClient) PluginManager {
-	return &pluginManager{
-		metricWriter: metricWriter,
-		pluginType:   pluginType,
-		pluginCmd:    pluginCmd,
-		pluginName:   filepath.Base(pluginCmd),
-		opts:         opts,
-		count:        1,
-		instances:    make([]Plugin, 0, 1),
-	}
+	instance Plugin
+	workers  uint
+
+	callTimeout       time.Duration
+	callRetries       uint
+	heartbeatInterval time.Duration
+
+	// internal worker attributes
+	stopCh chan struct{}
+	doneCh chan struct{}
 }
 
 func (p *pluginManager) Start() error {
-	// starts and configures the plugins so that they work correctly
-	errs := NewMultiError()
-	var wg sync.WaitGroup
-
-	for i := uint(0); i < p.count; i++ {
-		wg.Add(1)
-		instance, err := p.buildPlugin()
-		if err != nil {
-			errs.Add(err)
-
-			// most of the time, when an error occurs, it is
-			// because we specified an invalid plugin of this type.
-			// However, if there is a problem starting a plugin,
-			// then we need kill off the plugin before exiting.
-			if instance != nil {
-				p.eventMetric(shared.PluginFailedEvent)
-				instance.Kill()
-			}
-			wg.Done()
-			continue
-		}
-		p.instances = append(p.instances, instance)
-
-		go func(plugin Plugin) {
-			defer wg.Done()
-
-			// configure plugin
-			startTS := time.Now()
-			err := plugin.Configure(p.opts)
-			p.WriteMetric("configure", time.Now().Sub(startTS), err)
-			if err != nil {
-				p.eventMetric(shared.PluginFailedEvent)
-				errs.Add(err)
-				plugin.Kill()
-				return
-			}
-
-			// start plugin
-			startTS = time.Now()
-			err = plugin.Start()
-			p.WriteMetric("start", time.Now().Sub(startTS), err)
-			if err != nil {
-				p.eventMetric(shared.PluginFailedEvent)
-				errs.Add(err)
-				plugin.Kill()
-				return
-			}
-
-			p.eventMetric(shared.PluginStartedEvent)
-		}(instance)
+	if err := p.buildInstance(); err != nil {
+		p.Stop()
+		return err
 	}
 
-	wg.Wait()
-	return errs.ToErr()
+	// start the heartbeat worker
+	p.Lock()
+	p.workers += 1
+	p.Unlock()
+	go p.worker()
+	return nil
 }
 
-func (p *pluginManager) Stop(duration time.Duration) error {
+func (p *pluginManager) Stop(time.Duration) error {
 	errs := NewMultiError()
-
-	// stop each plugin in a goroutine
 	var wg sync.WaitGroup
-	for _, instance := range p.instances {
-		wg.Add(1)
-		go func(instance Plugin) {
-			// stop the instance
-			startTS := time.Now()
-			err := instance.Stop()
-			p.WriteMetric("stop", time.Now().Sub(startTS), err)
-			if err != nil {
-				p.eventMetric(shared.PluginFailedEvent)
-				errs.Add(err)
+
+	p.RLock()
+	workers := p.workers
+	p.RUnlock()
+
+	// for each worker, emit a stop message and wait for the corresponding
+	// done message to be passed back
+	_, ok := CallWithTimeout(dur, func() error {
+		wg.Add(workers)
+		for i := 0; i < workers; i++ {
+			p.stopCh <- struct{}{}
+		}
+
+		go func() {
+			for _, _ := range p.doneCh {
+				wg.Done()
 			}
-			p.eventMetric(shared.PluginStoppedEvent)
+		}()
 
-			// kill the plugin, regardless of whether it stopped successfully or not
-			startTS = time.Now()
-			instance.Kill()
-			p.WriteMetric("kill", time.Now().Sub(startTS), nil)
-
-			wg.Done()
-		}(instance)
+		wg.Wait()
+		close(p.doneCh)
+		return nil
+	})
+	if !ok {
+		errs.Add(InternalPluginError)
 	}
 
-	// wait for the plugins to all finish, or otherwise timeout
-	doneCh := make(chan struct{})
-	go func() {
-		wg.Wait()
-		doneCh <- struct{}{}
+	// stop and kill the plugin and its connection
+	err := p.Call("Stop", func(plugin Plugin) error {
+		return plugin.Stop()
+	})
+	if err != nil {
+		errs.Add(err)
+	}
+
+	err = p.Call("Kill", func(plugin Plugin) error {
+		plugin.Kill()
+		return nil
+	})
+	if err != nil {
+		errs.Add(err)
+	}
+
+	// clean up internal state
+	p.Lock()
+	p.workers = 0
+	p.instance = nil
+	p.Unlock()
+
+	return err
+}
+
+func (p *pluginManager) Grab(cb func(Plugin)) {
+	p.RLock()
+	defer p.RULock()
+
+	cb(p.instance)
+}
+
+// call will attempt to execute a method, using a timeout and will write
+// metrics around it! It will retry up to N times and waits a configurable
+// amount of time. It doesn't make any guarantees about error returns and
+// instead relies upon the callback returning Nil or a real error before
+// proceeding forward.
+func (p *pluginManager) Call(method string, cb func(Plugin) error) error {
+	calls := 0
+	defer func() {
+		if calls > 1 {
+			p.eventMetric(shared.PluginRetryEvent)
+		}
 	}()
 
-	// wait for the waitGroup to finish and signal or exit with a timeout
-	for {
-		select {
-		case <-doneCh:
-			goto cleanup
-		case <-time.After(duration):
-			errs.Add(InternalTimeoutError)
-			goto cleanup
-		}
-	}
+	return Retry(p.callRetries, func() error {
+		err, ok := CallWithTimeout(p.callTimeout, func() error {
+			p.RLock()
+			defer p.RUnlock()
 
-cleanup:
-	return errs.ToErr()
+			calls += 1
+
+			startTS := time.Now()
+			err := cb(p.instance)
+			p.pluginMetric(method, time.Now().Sub(startTS), err)
+			return err
+		})
+
+		if !ok {
+			return PluginTimeoutError
+		}
+		return err
+	})
 }
 
-func (p *pluginManager) Get() (Plugin, error) {
-	if len(p.instances) == 0 {
+// build builds a plugin instance, configuring and starting it
+func (p *pluginManager) buildInstance() error {
+	// fetch the plugin instance
+	instance, err := func() (Plugin, error) {
+		switch p.pluginType {
+		case LoadBalancerPlugin:
+			return loadbalancer_plugin.NewClient(p.pluginName, p.pluginCmd)
+		case ModifierPlugin:
+			return modifier_plugin.NewClient(p.pluginName, p.pluginCmd)
+		case MetricPlugin:
+			return metric_plugin.NewClient(p.pluginName, p.pluginCmd)
+		case UpstreamPlugin:
+			return upstream_plugin.NewClient(p.pluginName, p.pluginCmd)
+		case RouterPlugin:
+			return router_plugin.NewClient(p.pluginName, p.pluinCmd)
+		}
 		return nil, InternalPluginError
 	}
 
-	idx := rand.Intn(len(p.instances))
-	return p.instances[idx], nil
-}
-
-func (p *pluginManager) All() ([]Plugin, error) {
-	if len(p.instances) == 0 {
-		return []Plugin{}, InternalPluginError
-	}
-	return p.instances, nil
-}
-
-func (p *pluginManager) WriteMetric(method string, latency time.Duration, err error) {
-	pluginResponse := shared.PluginResponseOk
 	if err != nil {
-		pluginResponse = shared.PluginResponseNotOk
+		return err
 	}
 
-	metric := &shared.PluginMetric{
-		Timestamp:    time.Now(),
-		PluginType:   p.pluginType.String(),
-		PluginName:   p.pluginName,
-		MethodName:   method,
-		Latency:      latency,
-		ResponseType: pluginResponse,
-		Error:        err,
+	startTS := time.Now()
+	err = instance.Configure(p.args)
+	p.pluginMetric("Configure", time.Now().Sub(startTS), err)
+	if err != nil {
+		return err
 	}
-	p.metricWriter.PluginMetric(metric)
+
+	startTS = time.Now()
+	err = instance.Start()
+	p.pluginMetric("Start", time.Now().Sub(startTS), err)
+	if err != nil {
+		return err
+	}
+
+	p.Lock()
+	defer p.Unlock()
+	p.instance = instance
+	return nil
 }
 
-func (m pluginManager) buildPlugin() (Plugin, error) {
-	if m.pluginType == UpstreamPlugin {
-		return upstream_plugin.NewClient(m.pluginName, m.pluginCmd)
-	}
-	if m.pluginType == LoadBalancerPlugin {
-		return loadbalancer_plugin.NewClient(m.pluginName, m.pluginCmd)
-	}
-	if m.pluginType == ModifierPlugin {
-		return modifier_plugin.NewClient(m.pluginName, m.pluginCmd)
-	}
-	if m.pluginType == MetricPlugin {
-		return metric_plugin.NewClient(m.pluginName, m.pluginCmd)
-	}
+// worker is responsible for sending heartbeats off to the plugin after a configurable amount of time
+func (p *pluginManager) worker() {
+	ticker := time.NewTicker(p.heartbeatInterval)
 
-	shared.ProgrammingError("Invalid plugin type")
-	return nil, InternalPluginError
+	for {
+		select {
+		case <-ticker.C:
+			p.heartbeat()
+		case <-p.stopCh:
+			p.doneCh <- struct{}{}
+			return
+		}
+	}
 }
 
-// emits a new event to the metricsWriter, adding additional information into
-// the `Extra` field denoting the plugin name and path.
+// heartbeat is responsible for calling the Heartbeat method on the plugin with
+// a timeout and retry. If it continually fails, then we stop and rebuild the plugin.
+func (p *pluginManager) heartbeat() {
+	// Try to call the heartbeat method three times. Each call to the
+	// plugin will attempt up to p.retries times, respecting the call
+	// timeout configured in this plugin.
+	err := Retry(3, func() error {
+		return p.Call("Heartbeat", func(plugin Plugin) {
+			return plugin.Heartbeat()
+		})
+	})
+
+	if err == nil {
+		return
+	}
+
+	p.eventMetric(shared.PluginRestartedEvent)
+	p.buildInstance()
+}
+
 func (p *pluginManager) eventMetric(event shared.MetricEvent) {
-	metric := &shared.EventMetric{
-		Event:     event,
+	p.metricWriter.EventMetric(&shared.EventMetric{
 		Timestamp: time.Now(),
+		Event:     event,
 		Extra: map[string]string{
-			"plugin-type": p.pluginType.String(),
 			"plugin-name": p.pluginName,
+			"plugin-type": p.pluginType.String(),
 			"plugin-cmd":  p.pluginCmd,
 		},
-	}
-	p.metricWriter.EventMetric(metric)
+	})
+}
+
+func (p *pluginManager) pluginMetric(method string, latency time.Duration, err error) {
+	p.metricWriter.PluginMetric(&shared.PluginMetric{
+		Timestamp: time.Now(),
+		Latency:   latency,
+
+		PluginType: p.pluginType.String(),
+		PluginName: p.pluginName,
+		MethodName: method,
+
+		Err: err,
+	})
 }

@@ -23,23 +23,22 @@ var InvalidPluginTimeoutError = errors.New("invalid plugin-timeout")
 var InvalidProxyTimeoutError = errors.New("invalid proxy-timeout")
 
 type Options struct {
-	// name of the plugin binary, expects a full path or the name of a
-	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
+	// optional plugin configuration
+	RouterPlugin        string
+	RouterPluginArgs    map[string]interface{}
+	RouterPluginEnabled bool
+
+	LoadBalancerPlugin        string
+	LoadBalancerPluginArgs    map[string]interface{}
+	LoadBalancerPluginEnabled bool
+
+	// required plugins configuration
 	UpstreamPlugins    []string
 	UpstreamPluginArgs map[string]interface{}
 
-	// name of the plugin binary, expects a full path or the name of a
-	// binary in PATH eg: `loadbalancer` or `/home/foo/bin/loadbalancer`
-	LoadBalancerPlugin     string
-	LoadBalancerPluginArgs map[string]interface{}
-
-	// name of the plugin binary, expects a full path or the name of a
-	// binary in PATH eg: `modifier` or `/home/foo/bin/modifier`
 	ModifierPlugins    []string
 	ModifierPluginArgs map[string]interface{}
 
-	// name of the plugin binary, expects a full path or the name of a
-	// binary in PATH eg: `event` or `/home/foo/bin/event`
 	MetricPlugins    []string
 	MetricPluginArgs map[string]interface{}
 
@@ -79,7 +78,6 @@ func ValidatePlugins(rawCmds []string) ([]string, error) {
 }
 
 func (o *Options) Validate() error {
-	errs := NewMultiError()
-
-	return errs.ToErr()
+	// Not implemented yet
+	return nil
 }

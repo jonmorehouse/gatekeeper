@@ -1,21 +1,10 @@
 package gatekeeper
 
 import (
-	"fmt"
-	"sync"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
-
-type Modifier interface {
-	Start() error
-	Stop(time.Duration) error
-
-	ModifyRequest(*shared.Request) (*shared.Request, error)
-	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
-	ModifyErrorResponse(error, *shared.Request, *shared.Response) (*shared.Response, error)
-}
 
 type ModifierClient interface {
 	ModifyRequest(*shared.Request) (*shared.Request, error)
@@ -23,149 +12,92 @@ type ModifierClient interface {
 	ModifyErrorResponse(error, *shared.Request, *shared.Response) (*shared.Response, error)
 }
 
-type modifier struct {
-	metricWriter   MetricWriterClient
-	pluginManagers []PluginManager
+type Modifier interface {
+	StartStopper
+	ModifierClient
 }
 
-func NewModifier(pluginManagers []PluginManager, metricWriter MetricWriterClient) Modifier {
+func NewModifier(pluginManagers []PluginManager) {
 	return &modifier{
-		metricWriter:   metricWriter,
 		pluginManagers: pluginManagers,
 	}
 }
 
-func (r *modifier) Start() error {
-	errs := NewMultiError()
-
-	var wg sync.WaitGroup
-
-	// start all instances of all plugins
-	for _, manager := range r.pluginManagers {
-		wg.Add(1)
-		go func(manager PluginManager) {
-			defer wg.Done()
-			if err := manager.Start(); err != nil {
-				errs.Add(err)
-			}
-		}(manager)
-	}
-
-	wg.Wait()
-
-	return errs.ToErr()
+type modifier struct {
+	pluginManagers []PluginManager
 }
 
-func (r *modifier) Stop(duration time.Duration) error {
-	errs := NewMultiError()
-
-	var wg sync.WaitGroup
-	doneCh := make(chan struct{})
-
-	for _, manager := range r.pluginManagers {
-		wg.Add(1)
-		go func(p PluginManager) {
-			defer wg.Done()
-			if err := p.Stop(duration); err != nil {
-				errs.Add(err)
-			}
-		}(manager)
-	}
-
-	// wait for all managers to stop
-	go func() {
-		wg.Wait()
-		doneCh <- struct{}{}
-	}()
-
-	// wait for the waitGroup to finish or handle the timeout with an error
-	for {
-		select {
-		case <-doneCh:
-			return errs.ToErr()
-		case <-time.After(duration):
-			errs.Add(fmt.Errorf("timeout waiting for request plugins to Stop"))
-			return errs.ToErr()
-		}
-	}
-	return nil
-}
-
-func (r *modifier) getModifierClient(manager PluginManager) (ModifierClient, error) {
-	rawPlugin, err := manager.Get()
-	if err != nil {
-		shared.ProgrammingError("PluginManager has no instances available")
-		return nil, InternalPluginError
-	}
-
-	modifier, ok := rawPlugin.(ModifierClient)
-	if !ok {
-		shared.ProgrammingError("PluginManager returned an instance that was not a ModifierClient")
-		return nil, InternalPluginError
-	}
-
-	return modifier, nil
-}
+func (r *modifier) Start(time.Duration) error { return nil }
+func (r *modifier) Stop(time.Duration) error  { return nil }
 
 func (r *modifier) ModifyRequest(req *shared.Request) (*shared.Request, error) {
-	errs := NewMultiError()
+	var modifiedReq *shared.Request
+	var err error
 
 	for _, pluginManager := range r.pluginManagers {
-		modifier, err := r.getModifierClient(pluginManager)
-		if err != nil {
-			errs.Add(err)
-			continue
-		}
+		err = pluginManager.Call("ModifyRequest", func(plugin Plugin) error {
+			modifierPlugin, ok := plugin.(ModifierClient)
+			if !ok {
+				shared.ProgrammingError("Modifier misconfigured")
+				return nil
+			}
 
-		startTS := time.Now()
-		req, err = modifier.ModifyRequest(req)
-		pluginManager.WriteMetric("ModifyRequest", time.Now().Sub(startTS), err)
+			modifiedReq, err = modifierPlugin(req)
+			return err
+		})
+
 		if err != nil {
-			errs.Add(err)
+			return req, err
 		}
 	}
 
-	return req, errs.ToErr()
+	return modifiedReq, err
 }
 
 func (r *modifier) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
-	errs := NewMultiError()
+	var modifiedResp *shared.Response
+	var err error
 
 	for _, pluginManager := range r.pluginManagers {
-		modifier, err := r.getModifierClient(pluginManager)
-		if err != nil {
-			errs.Add(err)
-			continue
-		}
+		err = pluginManager.Call("ModifyResponse", func(plugin Plugin) error {
+			modifierPlugin, ok := plugin.(ModifierClient)
+			if !ok {
+				shared.ProgrammingError("Modifier misconfigured")
+				return nil
+			}
 
-		startTS := time.Now()
-		resp, err = modifier.ModifyResponse(req, resp)
-		pluginManager.WriteMetric("ModifyResponse", time.Now().Sub(startTS), err)
+			modifiedResp, err = modifierPlugin.ModifyResponse(req, resp)
+			return err
+		})
+
 		if err != nil {
-			errs.Add(err)
+			return resp, err
 		}
 	}
 
-	return resp, errs.ToErr()
+	return modifiedResp, err
 }
 
 func (r *modifier) ModifyErrorResponse(err error, req *shared.Request, resp *shared.Response) (*shared.Response, error) {
-	errs := NewMultiError()
+	var modifiedResp *shared.Response
+	var err error
 
 	for _, pluginManager := range r.pluginManagers {
-		modifier, err := r.getModifierClient(pluginManager)
-		if err != nil {
-			errs.Add(err)
-			continue
-		}
+		err = pluginManager.Call("ModifyErrorResponse", func(plugin Plugin) error {
+			modifierPlugin, ok := plugin.(ModifierClient)
+			if !ok {
+				shared.ProgrammingError("Modifier misconfigured")
+				return nil
+			}
 
-		startTS := time.Now()
-		resp, err = modifier.ModifyErrorResponse(err, req, resp)
-		pluginManager.WriteMetric("ModifyErrorResponse", time.Now().Sub(startTS), err)
+			modifiedResp, err = modifierPlugin.ModifyErrorResponse(err, req, resp)
+			return err
+		})
+
 		if err != nil {
-			errs.Add(err)
+			return resp, err
 		}
 	}
 
-	return resp, err
+	return modifiedResp, err
 }

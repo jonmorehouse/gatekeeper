@@ -1,179 +1,139 @@
 package gatekeeper
 
 import (
-	"fmt"
 	"log"
 	"sync"
-	"time"
-
-	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
-	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-// LoadBalancerManager is responsible for handling Backend events and piping
-// them along to a load balancer. Specifically, this entails listening to a
-// Broadcaster for the BackendRemoved and BackendAdded events and from there,
-// updating each instance of the plugin to ensure that all backend load
-// balancers have all the backends needed
 type LoadBalancer interface {
-	Start() error
-	GetBackend(*shared.Upstream) (*shared.Backend, error)
-	Stop(time.Duration) error
+	StartStopper
+
+	GetBackend(shared.UpstreamID) (*shared.Backend, error)
 }
 
-type LoadBalancerClient interface {
-	GetBackend(*shared.Upstream) (*shared.Backend, error)
-}
-
-type loadBalancer struct {
-	// dependencies
-	broadcaster   EventBroadcaster
-	pluginManager PluginManager
-
-	// internal
-	eventCh  EventCh
-	listenID EventListenerID
-	stopCh   chan struct{}
-}
-
-func NewLoadBalancer(broadcaster EventBroadcaster, pluginManager PluginManager) LoadBalancer {
-	return &loadBalancer{
-		broadcaster:   broadcaster,
-		pluginManager: pluginManager,
-		eventCh:       make(EventCh),
-		stopCh:        make(chan struct{}),
+func NewLocalLoadBalancer(broadcaster Broadcaster) LoadBalancer {
+	return &localLoadBalancer{
+		subscriber: NewSubscriber(broadcaster),
 	}
 }
 
-func (l *loadBalancer) Start() error {
-	// start the loadBalancer plugins
-	if err := l.pluginManager.Start(); err != nil {
-		return err
-	}
+type localLoadBalancer struct {
+	backends map[shared.UpstreamID]map[shared.BackendID]*shared.Backend
 
-	// configure this object to receive the correct events from the
-	// EventBroadcaster and process them correctly.
-	listenID, err := l.broadcaster.AddListener(l.eventCh, []EventType{BackendAdded, BackendRemoved})
-	if err != nil {
-		return err
-	}
-	l.listenID = listenID
-	go l.worker()
-	return nil
+	sync.RWMutex
 }
 
-func (l *loadBalancer) Stop(duration time.Duration) error {
-	errs := NewMultiError()
-	if err := l.broadcaster.RemoveListener(l.listenID); err != nil {
-		errs.Add(err)
-	}
-
-	doneCh := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	// stop all of the plugins in this pluginManager
-	go func() {
-		if err := l.pluginManager.Stop(duration); err != nil {
-			errs.Add(err)
-		}
-		wg.Done()
-	}()
-
-	// wait for the internal worker to stop
-	go func() {
-		l.stopCh <- struct{}{}
-		<-l.stopCh
-		wg.Done()
-	}()
-
-	// wait for the waitGroup to be finished
-	go func() {
-		wg.Wait()
-		doneCh <- struct{}{}
-	}()
-
-	// now wait until this entire method stops or times out
-	for {
-		select {
-		case <-doneCh:
-			goto done
-		case <-time.After(duration):
-			errs.Add(fmt.Errorf("Did not stop quickly enough"))
-			goto done
-		}
-	}
-done:
-	return errs.ToErr()
+func (l *localLoadBalancer) Start() error {
+	l.subscriber.AddUpstreamEventhook(shared.BackendAddedEvent, l.addBackendHook)
+	l.subscriber.AddUpstreamEventhook(shared.BackendRemovedEvent, l.removeBackendHook)
+	return l.subscriber.Start()
 }
 
-func (l *loadBalancer) GetBackend(upstream *shared.Upstream) (*shared.Backend, error) {
-	plugin, err := l.pluginManager.Get()
-	if err != nil {
-		return nil, err
+func (l *localLoadBalancer) GetBackend(upstreamID *shared.UpstreamID) (*shared.Backend, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	upstreamBackends, found := l.backends[upstreamID]
+	if !found {
+		return nil, BackendNotFoundError
 	}
 
-	// cast this plugin safely to the correct type
-	lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+	// because the go runtime provides randomization out of the box, we can
+	// just iterate until we find an element.
+	for _, backend := range upstreamBackends {
+		return backend, nil
+	}
+
+	return nil, BackendNotFoundError
+}
+
+func (l *localLoadBalancer) addBackendHook(event *UpstreamEvent) {
+	l.Lock()
+	defer l.Unlock()
+
+	_, ok := l.backends[event.UpstreamID]
 	if !ok {
-		shared.ProgrammingError("PluginManager returned an instance that was not a LoadBalancer")
-		return nil, fmt.Errorf("Invalid plugin type; this should not happen")
+		l.backends[event.UpstreamID] = make(map[shared.BackendID]*shared.Backend)
 	}
 
-	backend, errPtr := lbPlugin.GetBackend(upstream.ID)
-	if errPtr != nil {
-		return nil, errPtr
-	}
-	return backend, nil
+	l.backends[event.UpstreamID][event.BackendID] = event.Backend
 }
 
-func (l *loadBalancer) worker() {
-	for {
-		select {
-		case event := <-l.eventCh:
-			upstreamEvent, ok := event.(UpstreamEvent)
-			if !ok {
-				log.Fatal("Invalid event was broadcast")
-			}
-			go l.handleEvent(upstreamEvent)
-		case <-l.stopCh:
-			l.stopCh <- struct{}{}
+func (l *localLoadBalancer) removeBackendHook(event *UpstreamEvent) {
+	l.Lock()
+	defer l.Unlock()
+
+	_, ok := l.backends[event.UpstreamID]
+	if !ok {
+		return
+	}
+
+	delete(l.backends[event.UpstreamID], event.BackendID)
+}
+
+func NewPluginLoadBalancer(broadcaster Broadcaster, pluginManager PluginManager) LoadBalancer {
+	return &pluginLoadBalancer{
+		subscriber:    NewSubscriber(broadcaster),
+		pluginManager: pluginManager,
+	}
+}
+
+// pluginLoadBalancer accepts a loadBalancer plugin and a subscriber and is
+// responsible for passing along upstream events to the loadbalancer.
+// Specifically, it uses the subscriber to configure hooks to call into the
+// plugin when a new event is emitted internally
+type pluginLoadBalancer struct {
+	subscriber    Subscriber
+	pluginManager PluginManager
+}
+
+func (l *pluginLoadBalancer) Start() error {
+	l.subscriber.AddHook(shared.BackendAddedEvent, l.backendAddedHook)
+	l.subscriber.AddHook(shared.BackendRemovedEvent, l.backendRemovedHook)
+	return l.subscriber.Start()
+}
+
+func (l *pluginLoadBalancer) GetBackend(upstreamID shared.UpstreamID) (*shared.Backend, error) {
+	var backend *shared.Backend
+	var err error
+
+	l.pluginManager.Call("GetBackend", func(plugin Plugin) {
+		lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+		if !ok {
+			err = InternalPluginError
 			return
 		}
-	}
+
+		backend, err = lbPlugin.GetBackend(upstreamID)
+	})
+
+	return backend, err
 }
 
-func (l *loadBalancer) handleEvent(event UpstreamEvent) {
-	var cb func(loadbalancer_plugin.Plugin) error
-
-	switch event.EventType {
-	case BackendAdded:
-		cb = func(p loadbalancer_plugin.Plugin) error {
-			return p.AddBackend(event.UpstreamID, event.Backend)
+func (l *pluginLoadBalancer) backendAddedEvent(event *UpstreamEvent) {
+	l.pluginManager.Call("AddBackend", func(plugin Plugin) {
+		lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+		if !ok {
+			log.Println(InternalPluginError)
+			return
 		}
-	case BackendRemoved:
-		cb = func(p loadbalancer_plugin.Plugin) error {
-			return p.RemoveBackend(event.Backend)
+
+		if err := lbPlugin.AddBackend(event.UpstreamID, event.Backend); err != nil {
+			log.Println(err)
 		}
-	default:
-		log.Fatal("Broadcaster sent an unsubscribed for event")
-	}
+	})
+}
 
-	plugins, err := l.pluginManager.All()
-	if err != nil {
-		log.Println(err)
-	}
+func (l *pluginLoadBalancer) backendRemovedHook(event *UpstreamEvent) {
+	l.pluginManager.Call("RemoveBackend", func(plugin Plugin) {
+		lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+		if !ok {
+			log.Println(InternalPluginError)
+			return
+		}
 
-	var wg sync.WaitGroup
-	errs := NewMultiError()
-	for _, plugin := range plugins {
-		wg.Add(1)
-
-		go func(p loadbalancer_plugin.Plugin) {
-			defer wg.Done()
-			if err := Retry(func() error { return cb(p) }, 3); err != nil {
-				errs.Add(err)
-			}
-		}(plugin.(loadbalancer_plugin.Plugin))
-	}
+		if err := lbPlugin.RemoveBackend(event.Backend); err != nil {
+			log.Println(err)
+		}
+	})
 }

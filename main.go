@@ -82,10 +82,12 @@ func prefixedArgs(flags []*flag.Flag, prefix string) map[string]interface{} {
 func main() {
 	// plugin configuration
 	loadBalancerPlugin := flag.String("loadbalancer-plugin", "simple-loadbalancer", "loadbalancer-plugin cmd. default: simple-loadbalancer")
+	routerPlugin := flag.String("router-plugin", "example-router", "router-plugin cmd. default: example-router")
+
 	// accept comma delimited lists of plugins for metric, upstream and modifier plugins
 	upstreamPlugins := flag.String("upstream-plugins", "static-upstreams", "comma-delimited upstream-plugin cmds. default: static-upstreams")
 	metricPlugins := flag.String("metric-plugins", "metric-logger", "comma-delimited metric-plugin cmds. default: metric-plugins")
-	modifierPlugins := flag.String("modifier-plugins", "modifier", "comma-delimited modifier-plugin cmds. default: modifier-plugins")
+	modifierPlugins := flag.String("modifier-plugins", "example-modifier", "comma-delimited modifier-plugin cmds. default: example-modifier")
 
 	// server configuration
 	httpPublic := flag.Bool("http-public", true, "http-public enabled. default: true")
@@ -130,8 +132,12 @@ func main() {
 		ModifierPlugins:    strings.Split(*modifierPlugins, ","),
 		ModifierPluginArgs: prefixedArgs(extraFlags, "-modifier-"),
 
-		LoadBalancerPlugin:     *loadBalancerPlugin,
-		LoadBalancerPluginArgs: prefixedArgs(extraFlags, "-loadbalancer-"),
+		LoadBalancerPlugin:        *loadBalancerPlugin,
+		LoadBalancerPluginArgs:    prefixedArgs(extraFlags, "-loadbalancer-"),
+		LoadBalancerPluginEnabled: loadBalancerPluginEnabled,
+
+		RouterPlugin:        *routerPlugin,
+		RouterPluginEnabled: routerPluginEnabled,
 
 		HTTPPublic:     *httpPublic,
 		HTTPPublicPort: *httpPublicPort,

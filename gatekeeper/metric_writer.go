@@ -8,8 +8,7 @@ import (
 )
 
 type MetricWriter interface {
-	Start() error
-	Stop(time.Duration) error
+	StartStopper
 
 	EventMetric(*shared.EventMetric)
 	ProfilingMetric(*shared.ProfilingMetric)
@@ -30,363 +29,190 @@ type MetricWriterClient interface {
 	UpstreamMetric(*shared.UpstreamMetric)
 }
 
-type MetricPluginClient interface {
+// The MetricsWriter doesn't mind which metrics a plugin is interested in. For
+// each unique plugin type, we attempt to flush the buffered metrics to any
+// plugins that desire them. This makes it easier to pass metrics between new
+// plugin types dynamically.
+type eventMetricsReceiver interface {
 	WriteEventMetrics([]*shared.EventMetric) []error
+}
+
+type profilingMetricsReceiver interface {
 	WriteProfilingMetrics([]*shared.ProfilingMetric) []error
+}
+
+type pluginMetricsReceiver interface {
 	WritePluginMetrics([]*shared.PluginMetric) []error
+}
+
+type requestMetricsReceiver interface {
 	WriteRequestMetrics([]*shared.RequestMetric) []error
+}
+
+type upstreamMetricsReceiver interface {
 	WriteUpstreamMetrics([]*shared.UpstreamMetric) []error
 }
 
-type metricTuple struct {
-	name   string
-	metric interface{}
+func NewBufferedMetricsWriter(bufferSize int, flushInterval time.Duration, pluginManagers []PluginManager) MetricWriter {
+	return &metricWriter{
+		pluginManagers: pluginManagers,
+
+		bufferSize:    bufferSize,
+		flushInterval: flushInterval,
+		buffer:        make([]shared.Metric, 0, bufferSize),
+
+		stopCh:   make(chan struct{}),
+		doneCh:   make(chan struct{}),
+		bufferCh: make(chan shared.Metric, 10000),
+	}
 }
 
 type metricWriter struct {
-	pluginManagers []PluginManager // plugins that this metrics writer emits too
-	flushInterval  time.Duration   // maximum flush interval
-	maxBuffered    uint
-	buffered       uint
-	buffer         map[string][]interface{}
+	pluginManagers []PluginManager
 
-	metricCh chan metricTuple
+	buffer        []shared.Metric
+	bufferSize    int
+	flushInterval time.Duration
+
 	stopCh   chan struct{}
-	skipCh   chan struct{}
 	doneCh   chan struct{}
+	bufferCh chan shared.Metric
 }
 
-func NewMetricWriter(pluginManagers []PluginManager) MetricWriter {
-	return &metricWriter{
-		pluginManagers: pluginManagers,
-		flushInterval:  time.Millisecond * 500,
-		maxBuffered:    1000,
-		buffered:       0,
-		buffer: map[string][]interface{}{
-			"event-metrics":     make([]interface{}, 0, 0),
-			"profiling-metrics": make([]interface{}, 0, 0),
-			"plugin-metrics":    make([]interface{}, 0, 0),
-			"request-metrics":   make([]interface{}, 0, 0),
-			"upstream-metrics":  make([]interface{}, 0, 0),
-		},
-
-		metricCh: make(chan metricTuple, 1000),
-		stopCh:   make(chan struct{}),
-		skipCh:   make(chan struct{}),
-		doneCh:   make(chan struct{}),
-	}
+func (m *metricWriter) EventMetric(event *shared.EventMetric) {
+	m.bufferCh <- event
 }
 
-func (m *metricWriter) Start() error {
-	err := EachPluginManager(m.pluginManagers, func(pluginManager PluginManager) error {
-		return pluginManager.Start()
-	})
-	if err != nil {
-		return err
-	}
-
-	go m.worker()
-	return nil
+func (m *metricWriter) ProfilingMetric(event *shared.ProfilingMetric) {
+	m.bufferCh <- event
 }
 
-func (m *metricWriter) Stop(duration time.Duration) error {
-	m.stopCh <- struct{}{}
-	select {
-	case <-m.doneCh:
-		return nil
-	case <-time.After(duration):
-		return InternalTimeoutError
-	}
-
-	return EachPluginManager(m.pluginManagers, func(pluginManager PluginManager) error {
-		return pluginManager.Stop(duration)
-	})
+func (m *metricWriter) PluginMetric(event *shared.PluginMetric) {
+	m.bufferCh <- event
 }
 
-func (m *metricWriter) EventMetric(metric *shared.EventMetric) {
-	m.sendMetric(metricTuple{
-		metric: metric,
-		name:   "event-metrics",
-	})
+func (m *metricWriter) RequestMetric(event *shared.RequestMetric) {
+	m.bufferCh <- event
 }
 
-func (m *metricWriter) ProfilingMetric(metric *shared.ProfilingMetric) {
-	m.sendMetric(metricTuple{
-		metric: metric,
-		name:   "profiling-metrics",
-	})
-}
+func (m *metricWriter) UpstreamMetric(*shared.UpstreamMetric) {
+	m.bufferCh <- event
 
-func (m *metricWriter) PluginMetric(metric *shared.PluginMetric) {
-	m.sendMetric(metricTuple{
-		metric: metric,
-		name:   "plugin-metrics",
-	})
-}
-
-func (m *metricWriter) RequestMetric(metric *shared.RequestMetric) {
-	m.sendMetric(metricTuple{
-		metric: metric,
-		name:   "request-metrics",
-	})
-}
-
-func (m *metricWriter) UpstreamMetric(metric *shared.UpstreamMetric) {
-	m.sendMetric(metricTuple{
-		metric: metric,
-		name:   "upstream-metrics",
-	})
-}
-
-// emit a metric to our internal worker to be buffered and flushed later on
-func (m *metricWriter) sendMetric(tuple metricTuple) {
-	m.metricCh <- tuple
 }
 
 func (m *metricWriter) worker() {
-	// NOTE: we can't use a time.Ticker type here because we'd like to
-	// "reset" the timer periodically
-	flushCh := make(chan struct{})
-	flushTimer := time.AfterFunc(m.flushInterval, func() {
-		flushCh <- struct{}{}
-	})
+	timer := time.NewTimer(m.flushInterval)
+
+	flush := func() {
+		go m.flush(m.buffer)
+		m.buffer = make([]shared.Metric, 0, m.bufferSize)
+		timer.Reset()
+	}
+
+	defer func() {
+		timer.Stop()
+		m.flush(m.buffer)
+		m.buffer = []shared.Metric(nil)
+		m.doneCh <- struct{}{}
+	}()
 
 	for {
 		select {
-		case <-m.stopCh:
-			goto stop
 		case metric := <-m.metricCh:
-			m.bufferMetric(metric.name, metric.metric)
-			if m.buffered > m.maxBuffered {
-				m.flush()
-				flushTimer.Reset(m.flushInterval)
+			m.buffer = append(m.buffer, metric)
+			if len(m.buffer) == m.bufferSize {
+				flush()
 			}
-		case <-flushCh:
-			m.flush()
-			flushTimer.Reset(m.flushInterval)
+		case <-timer.C:
+			flush()
+		case <-stopCh:
+			return
+		}
+	}
+}
+
+// flush metrics to their correct methods on the correct plugins. This is a big
+// method, but its rather simple at a high level. We start by type-asserting
+// each buffered metric. This gives us a slice of each metric by type.	for
+// each of our plugins, we then go through them and see which metric interfaces
+// they correspond too. For each one, we send the right metrics their way.
+func (m *metricWriter) flush(buffer []shared.Metric) {
+	// create buffers for each unique kind of metric
+	eventMetrics := make([]*shared.EventMetric, 0, m.bufferSize)
+	profilingMetrics := make([]*shared.ProfilingMetrics, 0, m.bufferSize)
+	pluginMetrics := make([]*shared.PluginMetrics, 0, m.bufferSize)
+	requestMetrics := make([]*shared.RequestMetric, 0, m.bufferSize)
+	upstreamMetrics := make([]*shared.UpstreamMetric, 0, m.bufferSize)
+
+	// bucket metrics by their type
+	for _, metric := range buffer {
+		switch v := metric.(type) {
+		case *shared.EventMetric:
+			eventMetrics = append(eventMetrics, event.(*shared.EventMetric))
+		case *shared.ProfilingMetric:
+			profilingMetrics = append(profilingMetrics, event.(*shared.ProfilingMetric))
+		case *shared.PluginMetric:
+			pluginMetrics = append(pluginMetrics, event.(*shared.PluginMetric))
+		case *shared.RequestMetric:
+			requestMetrics = append(requestMetrics, event.(*shared.RequestMetric))
+		case *shared.UpstreamMetric:
+			upstreamMetric = append(upstreamMetrics, event.(*shared.UpstreamMetric))
+		default:
+			shared.ProgrammingError("unknown buffered metric")
 		}
 	}
 
-stop:
-	flushTimer.Stop()
-	m.flush()
-	m.doneCh <- struct{}{}
-}
-
-func (m *metricWriter) bufferMetric(kind string, metric interface{}) {
-	if _, ok := m.buffer[kind]; !ok {
-		shared.ProgrammingError("unable to buffer metric")
-		return
-	}
-
-	m.buffer[kind] = append(m.buffer[kind], metric)
-	m.buffered += 1
-}
-
-func (m *metricWriter) flush() {
-	// flush all metrics to the metrics plugin
-	go func(buffer map[string][]interface{}) {
-		var wg sync.WaitGroup
-
-		methods := map[string]func([]interface{}){
-			"event-metrics":     m.flushEventMetrics,
-			"profiling-metrics": m.flushProfilingMetrics,
-			"plugin-metrics":    m.flushPluginMetrics,
-			"request-metrics":   m.flushRequestMetrics,
-			"upstream-metrics":  m.flushUpstreamMetrics,
-		}
-
-		for kind, bufferedMetrics := range buffer {
-			method, ok := methods[kind]
-			if !ok {
-				shared.ProgrammingError("invalid metrics type in metric-writer")
-			}
-			wg.Add(1)
-
-			go func(method func([]interface{}), metrics []interface{}) {
-				method(metrics)
-				wg.Done()
-			}(method, bufferedMetrics)
-		}
-	}(m.buffer)
-
-	// allocate a new buffer after we pass a pointer to the old buffer to the go routine
-	m.buffer = map[string][]interface{}{
-		"event-metrics":     make([]interface{}, 0, m.maxBuffered),
-		"profiling-metrics": make([]interface{}, 0, m.maxBuffered),
-		"plugin-metrics":    make([]interface{}, 0, m.maxBuffered),
-		"request-metrics":   make([]interface{}, 0, m.maxBuffered),
-		"upstream-metrics":  make([]interface{}, 0, m.maxBuffered),
-	}
-	m.buffered = 0
-	m.EventMetric(&shared.EventMetric{
-		Timestamp: time.Now(),
-		Event:     shared.MetricsFlushedEvent,
-	})
-}
-
-func (m *metricWriter) localEventMetric(event shared.MetricEvent) {
-	m.EventMetric(&shared.EventMetric{
-		Timestamp: time.Now(),
-		Event:     event,
-	})
-}
-
-// for each pluginManager, call the closure passed in with a fully operable
-// MetricPluginClient, emitting metrics for each  call.
-func (m *metricWriter) eachPlugin(methodName string, cb func(MetricPluginClient) error) error {
 	var wg sync.WaitGroup
-	errs := NewMultiError()
 
+	// now for each plugin, try to write the metrics to each interface that
+	// it happens to implement. Any plugin that wants to receive metrics
+	// can simply implement any of the interfaces and they will be batched
+	// to them!
 	for _, pluginManager := range m.pluginManagers {
 		wg.Add(1)
 
 		go func(pluginManager PluginManager) {
 			defer wg.Done()
-			plugin, err := pluginManager.Get()
-			if err != nil {
-				shared.ProgrammingError("PluginManager has not instances available")
-				return
-			}
 
-			metricPlugin, ok := plugin.(MetricPluginClient)
-			if !ok {
-				shared.ProgrammingError("PluginManager returned an instance that was not a MetricsClient")
-				return
-			}
+			// Grab the plugin to do type switching, to decide which metrics to write to it.
+			pluginManager.Grab(func(plugin Plugin) {
+				// write event metrics
+				if _, ok := plugin.(eventMetricsReceiver); ok {
+					plugin.Call("WriteEventMetrics", func(plugin Plugin) error {
+						return plugin.(eventMetricsReceiver).WriteEventMetrics(eventMetrics)
+					})
+				}
 
-			// call the method, emitting a metric with its latency
-			startTS := time.Now()
-			err = cb(metricPlugin)
-			pluginManager.WriteMetric(methodName, time.Now().Sub(startTS), err)
-			if err != nil {
-				errs.Add(err)
-			}
-		}(pluginManager)
+				// write plugin metrics
+				if _, ok := plugin.(pluginMetricsReceiver); ok {
+					plugin.Call("WritePluginMetrics", func(plugin Plugin) error {
+						return plugin.(pluginMetricsReceiver).WritePluginMetrics(pluginMetrics)
+					})
+				}
+
+				// write profiling metrics
+				if _, ok := plugin.(profilingMetricsReceiver); ok {
+					plugin.Call("WriteProfilingMetrics", func(plugin Plugin) error {
+						return plugin.(profilingMetricsReceiver).WriteProfilingMetrics(profilingMetrics)
+					})
+				}
+
+				// write request metrics
+				if _, ok := plugin.(requestMetricsReceiver); ok {
+					plugin.Call("WriteRequestMetrics", func(plugin Plugin) error {
+						return plugin.(requestMetricsReceiver).WriteRequestMetrics(requestMetrics)
+					})
+				}
+
+				// write upstream metrics
+				if _, ok := plugin.(upstreamMetricsReceiver); ok {
+					plugin.Call("WriteUpstreamMetrics", func(plugin Plugin) error {
+						return plugin.(upstreamMetricsReceiver).WriteUpstreamMetrics(upstreamMetrics)
+					})
+				}
+			})
+		}()
 	}
 
 	wg.Wait()
-
-	return errs.ToErr()
-}
-
-func (m *metricWriter) flushEventMetrics(buffer []interface{}) {
-	metrics := make([]*shared.EventMetric, len(buffer))
-
-	for idx, metric := range buffer {
-		eventMetric, ok := metric.(*shared.EventMetric)
-		if !ok {
-			shared.ProgrammingError("unable to cast metric to *shared.EventMetric")
-			return
-		}
-		metrics[idx] = eventMetric
-	}
-
-	err := m.eachPlugin("WriteEventMetrics", func(plugin MetricPluginClient) error {
-		errs := plugin.WriteEventMetrics(metrics)
-		return (&MultiError{errors: errs}).ToErr()
-	})
-
-	if err != nil {
-		m.localEventMetric(shared.MetricsFlushedSuccessEvent)
-	} else {
-		m.localEventMetric(shared.MetricsFlushedErrorEvent)
-	}
-}
-
-func (m *metricWriter) flushProfilingMetrics(buffer []interface{}) {
-	metrics := make([]*shared.ProfilingMetric, len(buffer))
-
-	for idx, metric := range buffer {
-		eventMetric, ok := metric.(*shared.ProfilingMetric)
-		if !ok {
-			shared.ProgrammingError("unable to cast metric to *shared.ProfilingMetric")
-			return
-		}
-		metrics[idx] = eventMetric
-	}
-
-	err := m.eachPlugin("WriteProfilingMetrics", func(plugin MetricPluginClient) error {
-		errs := plugin.WriteProfilingMetrics(metrics)
-		return (&MultiError{errors: errs}).ToErr()
-	})
-
-	if err != nil {
-		m.localEventMetric(shared.MetricsFlushedSuccessEvent)
-	} else {
-		m.localEventMetric(shared.MetricsFlushedErrorEvent)
-	}
-}
-
-func (m *metricWriter) flushPluginMetrics(buffer []interface{}) {
-	metrics := make([]*shared.PluginMetric, len(buffer))
-
-	for idx, metric := range buffer {
-		eventMetric, ok := metric.(*shared.PluginMetric)
-		if !ok {
-			shared.ProgrammingError("unable to cast metric to *shared.PluginMetric")
-			return
-		}
-		metrics[idx] = eventMetric
-	}
-
-	err := m.eachPlugin("WritePluginMetrics", func(plugin MetricPluginClient) error {
-		errs := plugin.WritePluginMetrics(metrics)
-		return (&MultiError{errors: errs}).ToErr()
-
-	})
-
-	if err != nil {
-		m.localEventMetric(shared.MetricsFlushedSuccessEvent)
-	} else {
-		m.localEventMetric(shared.MetricsFlushedErrorEvent)
-	}
-}
-
-func (m *metricWriter) flushRequestMetrics(buffer []interface{}) {
-	metrics := make([]*shared.RequestMetric, len(buffer))
-
-	for idx, metric := range buffer {
-		eventMetric, ok := metric.(*shared.RequestMetric)
-		if !ok {
-			shared.ProgrammingError("unable to cast metric to *shared.RequestMetric")
-			return
-		}
-		metrics[idx] = eventMetric
-	}
-
-	err := m.eachPlugin("WriteRequestMetrics", func(plugin MetricPluginClient) error {
-		errs := plugin.WriteRequestMetrics(metrics)
-		return (&MultiError{errors: errs}).ToErr()
-	})
-
-	if err != nil {
-		m.localEventMetric(shared.MetricsFlushedSuccessEvent)
-	} else {
-		m.localEventMetric(shared.MetricsFlushedErrorEvent)
-	}
-}
-
-func (m *metricWriter) flushUpstreamMetrics(buffer []interface{}) {
-	metrics := make([]*shared.UpstreamMetric, len(buffer))
-
-	for idx, metric := range buffer {
-		eventMetric, ok := metric.(*shared.UpstreamMetric)
-		if !ok {
-			shared.ProgrammingError("unable to cast metric to *shared.UpstreamMetric")
-			return
-		}
-		metrics[idx] = eventMetric
-	}
-
-	err := m.eachPlugin("WriteUpstreamMetrics", func(plugin MetricPluginClient) error {
-		errs := plugin.WriteUpstreamMetrics(metrics)
-		return (&MultiError{errors: errs}).ToErr()
-	})
-
-	if err != nil {
-		m.localEventMetric(shared.MetricsFlushedSuccessEvent)
-	} else {
-		m.localEventMetric(shared.MetricsFlushedErrorEvent)
-	}
 }
