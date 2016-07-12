@@ -114,59 +114,23 @@ func (l *localRouter) worker() {
 	}
 }
 
-func NewPluginRouter(pluginManager PluginManager) Router {
+func NewPluginRouter(broadcaster Broadcaster, pluginManager PluginManager) Router {
 	return &pluginRouter{
+		subscriber:    NewSubscriber(broadcaster),
 		pluginManager: pluginManager,
 	}
 }
 
 type pluginRouter struct {
+	subscriber    Subscriber
 	pluginManager PluginManager
 }
 
 func (p *pluginRouter) Start() error {
-	// pass AddedUpstreams along to the plugin
-	p.pluginManager.AddListener(shared.UpstreamAddedEvent, func(plugin Plugin, event Event) {
-		routerPlugin, ok := plugin.(router_plugin.PluginClient)
-		if !ok {
-			log.Println(InternalPluginError)
-			return
-		}
-
-		upstreamEvent, ok := event.(*UpstreamEvent)
-		if !ok {
-			log.Println(InternalPluginError)
-			return
-		}
-
-		if err := routerPlugin.AddUpstream(upstreamEvent.Upstream); err != nil {
-			log.Println(err)
-			return
-		}
-	})
-
-	// pass RemovedUpstreams along to the plugin
-	p.pluginManager.AddListener(shared.UpstreamRemovedEvent, func(plugin Plugin, event Event) {
-		routerPlugin, ok := plugin.(router_plugin.PluginClient)
-		if !ok {
-			log.Println(InternalPluginError)
-			return
-		}
-
-		upstreamEvent, ok := event.(*UpstreamEvent)
-		if !ok {
-			log.Println(InternalPluginError)
-			return
-		}
-
-		if err := routerPlugin.RemoveUpstream(upstreamEvent.UpstreamID); err != nil {
-			log.Println(err)
-			return
-		}
-	})
+	p.subscriber.AddUpstreamEventHook(shared.UpstreamAddedEvent, p.addUpstreamHook)
+	p.subscriber.AddUpstreamEventHook(shared.UpstreamRemovedEvent, p.removeUpstreamHook)
+	return p.subscriber.Start()
 }
-
-func (p *pluginRouter) Stop(time.Duration) error {}
 
 func (p *pluginRouter) RouteRequest(req *shared.Request) (*shared.Upstream, *shared.Request, error) {
 	var upstream *shared.Upstream
@@ -183,5 +147,42 @@ func (p *pluginRouter) RouteRequest(req *shared.Request) (*shared.Upstream, *sha
 		return err
 	})
 
+	if callErr != nil {
+		return nil, req, callErr
+	}
+
 	return upstream, req, err
+}
+
+func (p *pluginRouter) addUpstreamHook(event *shared.UpstreamEvent) {
+	callErr := p.pluginManager.Call("AddUpstream", func(plugin Plugin) error {
+		routerPlugin, ok := plugin.(router_plugin.PluginClient)
+		if !ok {
+			shared.ProgrammingError(InternalPluginError)
+			return nil
+		}
+
+		return routerPlugin.AddUpstream(event.Upstream)
+	})
+
+	if callErr != nil {
+		log.Println(callErr)
+	}
+}
+
+func (p *pluginRouter) removeUpstreamHook(event *shared.UpstreamEvent) {
+	callErr := p.pluginManager.Call("RemoveUpstream", func(plugin Plugin) error {
+		routerPlugin, ok := plugin.(router_plugin.PluginClient)
+		if !ok {
+			shared.ProgrammingError(InternalPluginError)
+			return nil
+		}
+
+		return routerPlugin.RemoveUpstream(event.UpstreamID)
+	})
+
+	if callErr != nil {
+		log.Println(callErr)
+
+	}
 }

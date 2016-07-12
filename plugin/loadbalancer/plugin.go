@@ -9,12 +9,6 @@ import (
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-var Handshake = plugin.HandshakeConfig{
-	ProtocolVersion:  1,
-	MagicCookieKey:   "gatekeeper|plugin-type",
-	MagicCookieValue: "loadbalancer",
-}
-
 // Plugin is the interface which individual plugins implement and pass into the
 // Plugin interface. This package is responsible for building the scaffolding
 // around exposing the interface over RPC so that parent processes can talk to

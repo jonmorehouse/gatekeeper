@@ -97,43 +97,50 @@ func (l *pluginLoadBalancer) GetBackend(upstreamID shared.UpstreamID) (*shared.B
 	var backend *shared.Backend
 	var err error
 
-	l.pluginManager.Call("GetBackend", func(plugin Plugin) {
-		lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+	l.pluginManager.Call("GetBackend", func(plugin Plugin) error {
+		lbPlugin, ok := plugin.(loadbalancer_plugin.PluginClient)
 		if !ok {
 			err = InternalPluginError
-			return
+			return nil
 		}
 
 		backend, err = lbPlugin.GetBackend(upstreamID)
+		return err
 	})
 
 	return backend, err
 }
 
 func (l *pluginLoadBalancer) backendAddedEvent(event *UpstreamEvent) {
-	l.pluginManager.Call("AddBackend", func(plugin Plugin) {
-		lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+	l.pluginManager.Call("AddBackend", func(plugin Plugin) error {
+		lbPlugin, ok := plugin.(loadbalancer_plugin.PluginClient)
 		if !ok {
 			log.Println(InternalPluginError)
-			return
+			return nil
 		}
 
 		if err := lbPlugin.AddBackend(event.UpstreamID, event.Backend); err != nil {
 			log.Println(err)
+			return err
 		}
+
+		return nil
 	})
 }
 
 func (l *pluginLoadBalancer) backendRemovedHook(event *UpstreamEvent) {
-	l.pluginManager.Call("RemoveBackend", func(plugin Plugin) {
-		lbPlugin, ok := plugin.(loadbalancer_plugin.Plugin)
+	l.pluginManager.Call("RemoveBackend", func(plugin Plugin) error {
+		lbPlugin, ok := plugin.(loadbalancer_plugin.PluginClient)
 		if !ok {
 			log.Println(InternalPluginError)
-			return
+			return nil
 		}
 
 		if err := lbPlugin.RemoveBackend(event.Backend); err != nil {
 			log.Println(err)
+			return err
 		}
+
+		return nil
 	})
 }
