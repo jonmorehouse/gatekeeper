@@ -1,4 +1,4 @@
-package gatekeeper
+package core
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package gatekeeper
+package core
 
 import "github.com/jonmorehouse/gatekeeper/shared"
 
