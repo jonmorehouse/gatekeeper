@@ -8,7 +8,7 @@ import (
 	"time"
 
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 var NoManagerErr = errors.New("No manager set")
@@ -75,8 +75,8 @@ type Plugin struct {
 	rpcManager upstream_plugin.Manager
 	api        API
 
-	apiUpstream *shared.Upstream
-	apiBackend  *shared.Backend
+	apiUpstream *gatekeeper.Upstream
+	apiBackend  *gatekeeper.Backend
 }
 
 func (p *Plugin) Start() error {
@@ -108,10 +108,10 @@ func (p *Plugin) Start() error {
 	// once the server has been started, register this plugin as an
 	// upstream and backend itself so this can receive traffic through the
 	// gatekeeper proxy itself
-	p.apiUpstream = &shared.Upstream{
-		ID:        shared.NewUpstreamID(),
+	p.apiUpstream = &gatekeeper.Upstream{
+		ID:        gatekeeper.NewUpstreamID(),
 		Name:      "mysql-upstreams-api",
-		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 		Hostnames: []string{},
 		Prefixes:  []string{"upstreams-plugin"},
 		Timeout:   time.Second * 5,
@@ -121,8 +121,8 @@ func (p *Plugin) Start() error {
 		return fmt.Errorf("Unable to register plugin as an upstream itself")
 	}
 
-	p.apiBackend = &shared.Backend{
-		ID:          shared.NewBackendID(),
+	p.apiBackend = &gatekeeper.Backend{
+		ID:          gatekeeper.NewBackendID(),
 		Address:     fmt.Sprintf("http://127.0.0.1:%d", p.config.Port),
 		Healthcheck: "/health",
 	}
@@ -180,7 +180,7 @@ func (p *Plugin) SetManager(manager upstream_plugin.Manager) error {
 	return nil
 }
 
-func (p *Plugin) UpstreamMetric(metric *shared.UpstreamMetric) error {
+func (p *Plugin) UpstreamMetric(metric *gatekeeper.UpstreamMetric) error {
 	log.Println("upstream metric ...")
 	return nil
 }

@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 var NoRoutesAvailableError = errors.New("no routes available")
@@ -16,12 +16,12 @@ var InternalError = errors.New("internal error")
 // router implements the `router_plugin.Plugin` interface
 func NewRouter() router_plugin.Plugin {
 	return &router{
-		upstreams: make(map[shared.UpstreamID]*shared.Upstream),
+		upstreams: make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
 	}
 }
 
 type router struct {
-	upstreams map[shared.UpstreamID]*shared.Upstream
+	upstreams map[gatekeeper.UpstreamID]*gatekeeper.Upstream
 
 	*sync.RWMutex
 }
@@ -31,7 +31,7 @@ func (r *router) Stop() error                                 { return nil }
 func (r *router) Heartbeat() error                            { return nil }
 func (r *router) Configure(opts map[string]interface{}) error { return nil }
 
-func (r *router) AddUpstream(upstream *shared.Upstream) error {
+func (r *router) AddUpstream(upstream *gatekeeper.Upstream) error {
 	r.Lock()
 	defer r.Unlock()
 
@@ -45,7 +45,7 @@ func (r *router) AddUpstream(upstream *shared.Upstream) error {
 	return nil
 }
 
-func (r *router) RemoveUpstream(upstreamID shared.UpstreamID) error {
+func (r *router) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error {
 	r.Lock()
 	defer r.Unlock()
 
@@ -57,7 +57,7 @@ func (r *router) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	return nil
 }
 
-func (r *router) RouteRequest(req *shared.Request) (*shared.Upstream, *shared.Request, error) {
+func (r *router) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
 	r.RLock()
 	defer r.RUnlock()
 

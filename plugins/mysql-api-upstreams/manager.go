@@ -6,7 +6,7 @@ import (
 	"time"
 
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type ManagerError uint
@@ -52,19 +52,19 @@ type Manager interface {
 	Start() error
 	Stop() error
 
-	AddUpstream(*shared.Upstream) (shared.UpstreamID, error)
-	RemoveUpstream(shared.UpstreamID) error
+	AddUpstream(*gatekeeper.Upstream) (gatekeeper.UpstreamID, error)
+	RemoveUpstream(gatekeeper.UpstreamID) error
 
-	AddBackend(shared.UpstreamID, *shared.Backend) (shared.BackendID, error)
-	RemoveBackend(shared.BackendID) error
+	AddBackend(gatekeeper.UpstreamID, *gatekeeper.Backend) (gatekeeper.BackendID, error)
+	RemoveBackend(gatekeeper.BackendID) error
 }
 
 type ManagerClient interface {
-	AddUpstream(*shared.Upstream) (shared.UpstreamID, error)
-	RemoveUpstream(shared.UpstreamID) error
+	AddUpstream(*gatekeeper.Upstream) (gatekeeper.UpstreamID, error)
+	RemoveUpstream(gatekeeper.UpstreamID) error
 
-	AddBackend(shared.UpstreamID, *shared.Backend) (shared.BackendID, error)
-	RemoveBackend(shared.BackendID) error
+	AddBackend(gatekeeper.UpstreamID, *gatekeeper.Backend) (gatekeeper.BackendID, error)
+	RemoveBackend(gatekeeper.BackendID) error
 }
 
 type manager struct {
@@ -83,9 +83,9 @@ type manager struct {
 	*sync.RWMutex
 
 	// internal storage, which is mutex protected
-	upstreams        map[shared.UpstreamID]*shared.Upstream
-	backends         map[shared.BackendID]*shared.Backend
-	upstreamBackends map[shared.UpstreamID]map[shared.BackendID]struct{}
+	upstreams        map[gatekeeper.UpstreamID]*gatekeeper.Upstream
+	backends         map[gatekeeper.BackendID]*gatekeeper.Backend
+	upstreamBackends map[gatekeeper.UpstreamID]map[gatekeeper.BackendID]struct{}
 }
 
 func NewManager(config *Config, database Database, rpcManager upstream_plugin.Manager) Manager {
@@ -100,9 +100,9 @@ func NewManager(config *Config, database Database, rpcManager upstream_plugin.Ma
 		skipCh:       make(chan struct{}), // skip a sync
 		syncInterval: time.Millisecond * 500,
 
-		upstreams:        make(map[shared.UpstreamID]*shared.Upstream),
-		backends:         make(map[shared.BackendID]*shared.Backend),
-		upstreamBackends: make(map[shared.UpstreamID]map[shared.BackendID]struct{}),
+		upstreams:        make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
+		backends:         make(map[gatekeeper.BackendID]*gatekeeper.Backend),
+		upstreamBackends: make(map[gatekeeper.UpstreamID]map[gatekeeper.BackendID]struct{}),
 	}
 }
 
@@ -124,21 +124,21 @@ func (m *manager) Stop() error {
 }
 
 // add and upstream to the database and local gatekeeper processes, returning a unique global ID
-func (m *manager) AddUpstream(newUpstream *shared.Upstream) (shared.UpstreamID, error) {
+func (m *manager) AddUpstream(newUpstream *gatekeeper.Upstream) (gatekeeper.UpstreamID, error) {
 	// tell the background worker to skip a sync because we want to make
 	// sure we have the best representation of the data possible here.
 	m.skipCh <- struct{}{}
 	m.sync()
 
-	if newUpstream.ID != shared.NilUpstreamID {
+	if newUpstream.ID != gatekeeper.NilUpstreamID {
 		// we don't support update for upstreams
-		return shared.NilUpstreamID, UpstreamDuplicateError
+		return gatekeeper.NilUpstreamID, UpstreamDuplicateError
 	}
 
 	upstreamID, err := m.database.AddUpstream(newUpstream)
 	if err != nil {
 		log.Println("unable to add upstream to database: ", err)
-		return shared.NilUpstreamID, UpstreamDatabaseError
+		return gatekeeper.NilUpstreamID, UpstreamDatabaseError
 	}
 
 	newUpstream.ID = upstreamID
@@ -146,7 +146,7 @@ func (m *manager) AddUpstream(newUpstream *shared.Upstream) (shared.UpstreamID, 
 }
 
 // remove an upstream and all of its backends
-func (m *manager) RemoveUpstream(upstreamID shared.UpstreamID) error {
+func (m *manager) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error {
 	// reset the interval to tell the background worker to skip a sync,
 	// since we're doing it here and want to make sure we have the latest
 	// data
@@ -164,20 +164,20 @@ func (m *manager) RemoveUpstream(upstreamID shared.UpstreamID) error {
 }
 
 // add a backend to both the database and the local gatekeeper processes. Return a unique, global ID for the Backend
-func (m *manager) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) (shared.BackendID, error) {
+func (m *manager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) (gatekeeper.BackendID, error) {
 	// skip a background sync job and sync the data immediately
 	m.skipCh <- struct{}{}
 	m.sync()
 
 	// backends cannot be updated; any backend without a nil ID will be rejected
-	if backend.ID != shared.NilBackendID {
-		return shared.NilBackendID, BackendDuplicateError
+	if backend.ID != gatekeeper.NilBackendID {
+		return gatekeeper.NilBackendID, BackendDuplicateError
 	}
 
 	backendID, err := m.database.AddBackend(upstreamID, backend)
 	if err != nil {
 		log.Println("unable to add backend to database: ", err)
-		return shared.NilBackendID, BackendDatabaseError
+		return gatekeeper.NilBackendID, BackendDatabaseError
 	}
 
 	backend.ID = backendID
@@ -185,7 +185,7 @@ func (m *manager) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backe
 }
 
 // remove a backend from the Database and the local gatekeeper processes
-func (m *manager) RemoveBackend(backendID shared.BackendID) error {
+func (m *manager) RemoveBackend(backendID gatekeeper.BackendID) error {
 	m.skipCh <- struct{}{}
 	m.sync()
 
@@ -231,8 +231,8 @@ func (m *manager) sync() error {
 	errs := NewMultiError()
 
 	// we maintain a list of state that needs to stick around
-	upstreamsToKeep := make(map[shared.UpstreamID]struct{})
-	backendsToKeep := make(map[shared.BackendID]struct{})
+	upstreamsToKeep := make(map[gatekeeper.UpstreamID]struct{})
+	backendsToKeep := make(map[gatekeeper.BackendID]struct{})
 
 	// for each upstream, sync the local state with the database state if necessary
 	for _, upstream := range upstreams {
@@ -258,7 +258,7 @@ func (m *manager) sync() error {
 			// NOTE this should never be the case due to the fact
 			// that we set the upstreamBackends map in the
 			// localAddUpstream method.
-			m.upstreamBackends[upstream.ID] = make(map[shared.BackendID]struct{})
+			m.upstreamBackends[upstream.ID] = make(map[gatekeeper.BackendID]struct{})
 			continue
 		}
 
@@ -277,8 +277,8 @@ func (m *manager) sync() error {
 	}
 
 	// loop through all known backends and upstreams and decipher which ones need to be deleted
-	backendsToRemove := make([]shared.BackendID, 0, 0)
-	upstreamsToRemove := make([]shared.UpstreamID, 0, 0)
+	backendsToRemove := make([]gatekeeper.BackendID, 0, 0)
+	upstreamsToRemove := make([]gatekeeper.UpstreamID, 0, 0)
 
 	m.RLock()
 	for upstreamID, _ := range m.upstreams {
@@ -309,7 +309,7 @@ func (m *manager) sync() error {
 }
 
 // add a local upstream to the plugin's state, as well as the parent process
-func (m *manager) addLocalUpstream(upstream *shared.Upstream) error {
+func (m *manager) addLocalUpstream(upstream *gatekeeper.Upstream) error {
 	m.RLock()
 	if _, found := m.upstreams[upstream.ID]; found {
 		m.RUnlock()
@@ -327,12 +327,12 @@ func (m *manager) addLocalUpstream(upstream *shared.Upstream) error {
 	defer m.Unlock()
 
 	m.upstreams[upstream.ID] = upstream
-	m.upstreamBackends[upstream.ID] = make(map[shared.BackendID]struct{})
+	m.upstreamBackends[upstream.ID] = make(map[gatekeeper.BackendID]struct{})
 	return nil
 }
 
 // remove an upstream and all of its backends from the local plugin state and the parent process
-func (m *manager) removeLocalUpstream(upstreamID shared.UpstreamID) error {
+func (m *manager) removeLocalUpstream(upstreamID gatekeeper.UpstreamID) error {
 	m.RLock()
 	if _, found := m.upstreams[upstreamID]; !found {
 		m.RUnlock()
@@ -360,7 +360,7 @@ func (m *manager) removeLocalUpstream(upstreamID shared.UpstreamID) error {
 }
 
 // add a backend to the local cache as well as the parent process
-func (m *manager) addLocalBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
+func (m *manager) addLocalBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
 	m.RLock()
 
 	// make sure that the upstream this backend belongs to exists
@@ -395,7 +395,7 @@ func (m *manager) addLocalBackend(upstreamID shared.UpstreamID, backend *shared.
 }
 
 // remove the backend from the local state, updating the parent over RPC to remove the backend
-func (m *manager) removeLocalBackend(backendID shared.BackendID) error {
+func (m *manager) removeLocalBackend(backendID gatekeeper.BackendID) error {
 	var err error
 	m.Lock()
 

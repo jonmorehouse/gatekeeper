@@ -5,7 +5,7 @@ import (
 	"log"
 
 	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type Plugin struct {
@@ -32,7 +32,7 @@ func (*Plugin) Stop() error {
 	return nil
 }
 
-func (p *Plugin) ModifyRequest(req *shared.Request) (*shared.Request, error) {
+func (p *Plugin) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
 	if req.Header == nil {
 		req.Header = make(map[string][]string)
 	}
@@ -41,12 +41,12 @@ func (p *Plugin) ModifyRequest(req *shared.Request) (*shared.Request, error) {
 	return req, nil
 }
 
-func (Plugin) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
+func (Plugin) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
 	resp.Header.Set("X-Request-ID", req.Header["X-Request-ID"][0])
 	return resp, nil
 }
 
-func (Plugin) ModifyErrorResponse(err error, req *shared.Request, resp *shared.Response) (*shared.Response, error) {
+func (Plugin) ModifyErrorResponse(err error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
 	//resp.Header.Add("X-Error", "error")
 	return resp, nil
 }
