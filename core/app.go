@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type startStop interface {
@@ -41,9 +41,9 @@ func New(options Options) (*App, error) {
 		metricPlugins[idx] = plugin
 	}
 
-	metricWriter.EventMetric(&shared.EventMetric{
+	metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Timestamp: time.Now(),
-		Event:     shared.AppStartedEvent,
+		Event:     gatekeeper.AppStartedEvent,
 	})
 
 	// the broadcaster is what glues everything together. It is responsible
@@ -110,7 +110,7 @@ func New(options Options) (*App, error) {
 	if options.HTTPPublicPort != 0 {
 		servers = append(servers, &ProxyServer{
 			port:            options.HTTPPublicPort,
-			protocol:        shared.HTTPPublic,
+			protocol:        gatekeeper.HTTPPublic,
 			proxier:         proxier,
 			upstreamMatcher: upstreamMatcher,
 			loadBalancer:    loadBalancer,
@@ -215,9 +215,9 @@ func (a *App) Stop(duration time.Duration) error {
 	wg.Wait()
 
 	// emit a metric denoting that the app is stopping
-	a.metricWriter.EventMetric(&shared.EventMetric{
+	a.metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Timestamp: time.Now(),
-		Event:     shared.AppStoppedEvent,
+		Event:     gatekeeper.AppStoppedEvent,
 	})
 	// NOTE: we stop the `metricWriter` plugin last, so as to allow for
 	// other plugins to emit metrics to it in their stop methods

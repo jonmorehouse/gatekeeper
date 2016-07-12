@@ -3,13 +3,13 @@ package core
 import (
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type ModifierClient interface {
-	ModifyRequest(*shared.Request) (*shared.Request, error)
-	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
-	ModifyErrorResponse(error, *shared.Request, *shared.Response) (*shared.Response, error)
+	ModifyRequest(*gatekeeper.Request) (*gatekeeper.Request, error)
+	ModifyResponse(*gatekeeper.Request, *gatekeeper.Response) (*gatekeeper.Response, error)
+	ModifyErrorResponse(error, *gatekeeper.Request, *gatekeeper.Response) (*gatekeeper.Response, error)
 }
 
 type Modifier interface {
@@ -30,15 +30,15 @@ type modifier struct {
 func (r *modifier) Start(time.Duration) error { return nil }
 func (r *modifier) Stop(time.Duration) error  { return nil }
 
-func (r *modifier) ModifyRequest(req *shared.Request) (*shared.Request, error) {
-	var modifiedReq *shared.Request
+func (r *modifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
+	var modifiedReq *gatekeeper.Request
 	var err error
 
 	for _, pluginManager := range r.pluginManagers {
 		err = pluginManager.Call("ModifyRequest", func(plugin Plugin) error {
 			modifierPlugin, ok := plugin.(ModifierClient)
 			if !ok {
-				shared.ProgrammingError("Modifier misconfigured")
+				gatekeeper.ProgrammingError("Modifier misconfigured")
 				return nil
 			}
 
@@ -54,15 +54,15 @@ func (r *modifier) ModifyRequest(req *shared.Request) (*shared.Request, error) {
 	return modifiedReq, err
 }
 
-func (r *modifier) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
-	var modifiedResp *shared.Response
+func (r *modifier) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+	var modifiedResp *gatekeeper.Response
 	var err error
 
 	for _, pluginManager := range r.pluginManagers {
 		err = pluginManager.Call("ModifyResponse", func(plugin Plugin) error {
 			modifierPlugin, ok := plugin.(ModifierClient)
 			if !ok {
-				shared.ProgrammingError("Modifier misconfigured")
+				gatekeeper.ProgrammingError("Modifier misconfigured")
 				return nil
 			}
 
@@ -78,15 +78,15 @@ func (r *modifier) ModifyResponse(req *shared.Request, resp *shared.Response) (*
 	return modifiedResp, err
 }
 
-func (r *modifier) ModifyErrorResponse(err error, req *shared.Request, resp *shared.Response) (*shared.Response, error) {
-	var modifiedResp *shared.Response
+func (r *modifier) ModifyErrorResponse(err error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+	var modifiedResp *gatekeeper.Response
 	var err error
 
 	for _, pluginManager := range r.pluginManagers {
 		err = pluginManager.Call("ModifyErrorResponse", func(plugin Plugin) error {
 			modifierPlugin, ok := plugin.(ModifierClient)
 			if !ok {
-				shared.ProgrammingError("Modifier misconfigured")
+				gatekeeper.ProgrammingError("Modifier misconfigured")
 				return nil
 			}
 

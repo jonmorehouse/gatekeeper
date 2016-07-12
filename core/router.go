@@ -6,11 +6,11 @@ import (
 	"time"
 
 	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type RouterClient interface {
-	RouteRequest(*shared.Request) (*shared.Upstream, *shared.Request, error)
+	RouteRequest(*gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error)
 }
 
 type Router interface {
@@ -24,9 +24,9 @@ func NewLocalRouter(broadcaster Broadcaster, metricWriter MetricWriter) Router {
 		broadcaster: broadcaster,
 		eventCh:     make(EventCh, 10),
 
-		upstreams:     make(map[shared.UpstreamID]*shared.Upstream),
-		prefixCache:   make(map[string]*shared.Upstream),
-		hostnameCache: make(map[string]*shared.Upstream),
+		upstreams:     make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
+		prefixCache:   make(map[string]*gatekeeper.Upstream),
+		hostnameCache: make(map[string]*gatekeeper.Upstream),
 	}
 }
 
@@ -37,14 +37,14 @@ type localRouter struct {
 
 	sync.RWMutex
 
-	upstreams     map[shared.UpstreamID]*shared.Upstream
-	prefixCache   map[string]*shared.Upstream
-	hostnameCache map[string]*shared.Upstream
+	upstreams     map[gatekeeper.UpstreamID]*gatekeeper.Upstream
+	prefixCache   map[string]*gatekeeper.Upstream
+	hostnameCache map[string]*gatekeeper.Upstream
 }
 
 func (l *localRouter) Start() error {
 	go worker()
-	l.listenerID = l.broadcaster.AddListener(l.eventCh, []shared.Event{shared.UpstreamAddedEvent, shared.UpstreamRemovedEvent})
+	l.listenerID = l.broadcaster.AddListener(l.eventCh, []gatekeeper.Event{gatekeeper.UpstreamAddedEvent, gatekeeper.UpstreamRemovedEvent})
 }
 
 func (l *localRouter) Stop(dur time.Duration) error {
@@ -52,7 +52,7 @@ func (l *localRouter) Stop(dur time.Duration) error {
 	close(l.eventCh)
 }
 
-func (l *localRouter) RouteRequest(req *shared.Request) (*shared.Upstream, *shared.Request, error) {
+func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
 	l.RLock()
 	defer l.RUnlock()
 
@@ -92,13 +92,13 @@ func (l *localRouter) worker() {
 			log.Println(err)
 			continue
 		}
-		if event.Type() != shared.UpstreamAddedEvent && event.Type() != shared.UpstreamRemovedEvent {
+		if event.Type() != gatekeeper.UpstreamAddedEvent && event.Type() != gatekeeper.UpstreamRemovedEvent {
 			log.Println(UnsubscribedEventError)
 			continue
 		}
 
 		l.Lock()
-		if event.Type() == shared.UpstreamAddedEvent {
+		if event.Type() == gatekeeper.UpstreamAddedEvent {
 			l.upstreams[upstreamEvent.UpstreamID] = upstreamEvent.Upstream
 		} else {
 			// clear all state
@@ -127,19 +127,19 @@ type pluginRouter struct {
 }
 
 func (p *pluginRouter) Start() error {
-	p.subscriber.AddUpstreamEventHook(shared.UpstreamAddedEvent, p.addUpstreamHook)
-	p.subscriber.AddUpstreamEventHook(shared.UpstreamRemovedEvent, p.removeUpstreamHook)
+	p.subscriber.AddUpstreamEventHook(gatekeeper.UpstreamAddedEvent, p.addUpstreamHook)
+	p.subscriber.AddUpstreamEventHook(gatekeeper.UpstreamRemovedEvent, p.removeUpstreamHook)
 	return p.subscriber.Start()
 }
 
-func (p *pluginRouter) RouteRequest(req *shared.Request) (*shared.Upstream, *shared.Request, error) {
-	var upstream *shared.Upstream
+func (p *pluginRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
+	var upstream *gatekeeper.Upstream
 	var err error
 
 	callErr := p.pluginManager.Call("RouteRequest", func(plugin Plugin) error {
 		routerPlugin, ok := plugin.(router_plugin.PluginClient)
 		if !ok {
-			shared.ProgrammingError(InternalPluginError)
+			gatekeeper.ProgrammingError(InternalPluginError)
 			return nil
 		}
 
@@ -154,11 +154,11 @@ func (p *pluginRouter) RouteRequest(req *shared.Request) (*shared.Upstream, *sha
 	return upstream, req, err
 }
 
-func (p *pluginRouter) addUpstreamHook(event *shared.UpstreamEvent) {
+func (p *pluginRouter) addUpstreamHook(event *gatekeeper.UpstreamEvent) {
 	callErr := p.pluginManager.Call("AddUpstream", func(plugin Plugin) error {
 		routerPlugin, ok := plugin.(router_plugin.PluginClient)
 		if !ok {
-			shared.ProgrammingError(InternalPluginError)
+			gatekeeper.ProgrammingError(InternalPluginError)
 			return nil
 		}
 
@@ -170,11 +170,11 @@ func (p *pluginRouter) addUpstreamHook(event *shared.UpstreamEvent) {
 	}
 }
 
-func (p *pluginRouter) removeUpstreamHook(event *shared.UpstreamEvent) {
+func (p *pluginRouter) removeUpstreamHook(event *gatekeeper.UpstreamEvent) {
 	callErr := p.pluginManager.Call("RemoveUpstream", func(plugin Plugin) error {
 		routerPlugin, ok := plugin.(router_plugin.PluginClient)
 		if !ok {
-			shared.ProgrammingError(InternalPluginError)
+			gatekeeper.ProgrammingError(InternalPluginError)
 			return nil
 		}
 

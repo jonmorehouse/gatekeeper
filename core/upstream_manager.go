@@ -6,7 +6,7 @@ import (
 	"time"
 
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type UpstreamManager interface {
@@ -19,8 +19,8 @@ func NewUpstreamManager(broadcaster EventBroadcaster, plugins []PluginManager, m
 		plugins:     plugins,
 		broadcaster: broadcaster,
 
-		upstreams: make(map[shared.UpstreamID]*shared.Upstream),
-		backends:  make(map[shared.BackendID]*shared.Backend),
+		upstreams: make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
+		backends:  make(map[gatekeeper.BackendID]*gatekeeper.Backend),
 	}
 }
 
@@ -28,13 +28,13 @@ type upstreamManager struct {
 	plugins     []PluginManager
 	broadcaster EventBroadcaster
 
-	upstreams map[shared.UpstreamID]*shared.Upstream
-	backends  map[shared.Backend]*shared.Backend
+	upstreams map[gatekeeper.UpstreamID]*gatekeeper.Upstream
+	backends  map[gatekeeper.Backend]*gatekeeper.Backend
 
 	sync.Mutex
 }
 
-func (m *upstreamManager) AddUpstream(upstream *shared.Upstream) error {
+func (m *upstreamManager) AddUpstream(upstream *gatekeeper.Upstream) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -46,8 +46,8 @@ func (m *upstreamManager) AddUpstream(upstream *shared.Upstream) error {
 	m.upstreams[upstream.ID] = upstream
 
 	// emit events to the internal and metric-writer pipelines
-	m.eventMetric(shared.UpstreamAddedEvent)
-	m.upstreamMetric(shared.UpstreamAddedEvent, upstream, nil)
+	m.eventMetric(gatekeeper.UpstreamAddedEvent)
+	m.upstreamMetric(gatekeeper.UpstreamAddedEvent, upstream, nil)
 	m.broadcaster.Publish(&UpstreamEvent{
 		EventType:  UpstreamAdded,
 		Upstream:   upstream,
@@ -56,7 +56,7 @@ func (m *upstreamManager) AddUpstream(upstream *shared.Upstream) error {
 	return nil
 }
 
-func (m *upstreamManager) RemoveUpstream(upstreamID shared.UpstreamID) error {
+func (m *upstreamManager) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -67,8 +67,8 @@ func (m *upstreamManager) RemoveUpstream(upstreamID shared.UpstreamID) error {
 
 	delete(p.upstreams, upstreamID)
 
-	m.eventMetric(shared.UpstreamRemovedEvent)
-	m.upstreamMetric(shared.UpstreamRemovedEvent, upstream, nil)
+	m.eventMetric(gatekeeper.UpstreamRemovedEvent)
+	m.upstreamMetric(gatekeeper.UpstreamRemovedEvent, upstream, nil)
 	m.broadcaster.Publish(&UpstreamEvent{
 		EventType:  UpstreamRemoved,
 		Upstream:   upstream,
@@ -77,7 +77,7 @@ func (m *upstreamManager) RemoveUpstream(upstreamID shared.UpstreamID) error {
 	return nil
 }
 
-func (p *upstreamManager) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
+func (p *upstreamManager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -99,8 +99,8 @@ func (p *upstreamManager) AddBackend(upstreamID shared.UpstreamID, backend *shar
 	m.backends[backend.ID] = backend
 	m.backendUpstreams[backend.ID] = upstreamID
 
-	m.eventMetric(shared.BackendAddedEvent)
-	m.upstreamMetric(shared.BackendAddedEvent, upstream, backend)
+	m.eventMetric(gatekeeper.BackendAddedEvent)
+	m.upstreamMetric(gatekeeper.BackendAddedEvent, upstream, backend)
 	m.broadcaster.Publish(&UpstreamEvent{
 		EventType:  BackendAdded,
 		Upstream:   upstream,
@@ -112,7 +112,7 @@ func (p *upstreamManager) AddBackend(upstreamID shared.UpstreamID, backend *shar
 	return nil
 }
 
-func (p *upstreamManager) RemoveBackend(backendID shared.BackendID) error {
+func (p *upstreamManager) RemoveBackend(backendID gatekeeper.BackendID) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -128,8 +128,8 @@ func (p *upstreamManager) RemoveBackend(backendID shared.BackendID) error {
 
 	delete(m.backends, backendID)
 
-	m.eventMetric(shared.BackendRemovedEvent)
-	m.upstreamMetric(shared.BackendRemovedEvent, upstream, backend)
+	m.eventMetric(gatekeeper.BackendRemovedEvent)
+	m.upstreamMetric(gatekeeper.BackendRemovedEvent, upstream, backend)
 	m.broadcaster.Publish(&UpstreamEvent{
 		EventType:  BackendRemoved,
 		Upstream:   upstream,
@@ -141,8 +141,8 @@ func (p *upstreamManager) RemoveBackend(backendID shared.BackendID) error {
 	return nil
 }
 
-func (p *upstreamManager) eventMetric(event shared.MetricEvent) {
-	p.metricWriter.EventMetric(&shared.EventMetric{
+func (p *upstreamManager) eventMetric(event gatekeeper.MetricEvent) {
+	p.metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Timestamp: time.Now(),
 		Event:     event,
 		Extra: map[string]string{
@@ -151,8 +151,8 @@ func (p *upstreamManager) eventMetric(event shared.MetricEvent) {
 	})
 }
 
-func (p *upstreamManager) upstreamMetric(event shared.MetricEvent, upstream *shared.Upstream, backend *shared.Backend) {
-	p.metricWriter.UpstreamMetric(&shared.UpstreamMetric{
+func (p *upstreamManager) upstreamMetric(event gatekeeper.MetricEvent, upstream *gatekeeper.Upstream, backend *gatekeeper.Backend) {
+	p.metricWriter.UpstreamMetric(&gatekeeper.UpstreamMetric{
 		Event:     event,
 		Timestamp: time.Now(),
 		Upstream:  upstream,

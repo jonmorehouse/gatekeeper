@@ -8,11 +8,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type Proxier interface {
-	Proxy(http.ResponseWriter, *http.Request, *shared.Request, *shared.Upstream, *shared.Backend, *shared.RequestMetric) error
+	Proxy(http.ResponseWriter, *http.Request, *gatekeeper.Request, *gatekeeper.Upstream, *gatekeeper.Backend, *gatekeeper.RequestMetric) error
 }
 
 type proxier struct {
@@ -33,10 +33,10 @@ func NewProxier(modifier Modifier, metricWriter MetricWriterClient) Proxier {
 
 func (p *proxier) Proxy(rw http.ResponseWriter,
 	httpReq *http.Request,
-	req *shared.Request,
-	upstream *shared.Upstream,
-	backend *shared.Backend,
-	metric *shared.RequestMetric) error {
+	req *gatekeeper.Request,
+	upstream *gatekeeper.Upstream,
+	backend *gatekeeper.Backend,
+	metric *gatekeeper.RequestMetric) error {
 
 	backendAddress, err := url.Parse(backend.Address)
 	if err != nil {
@@ -59,7 +59,7 @@ func (p *proxier) Proxy(rw http.ResponseWriter,
 			}
 		}
 
-		resp := shared.NewResponse(httpResp)
+		resp := gatekeeper.NewResponse(httpResp)
 
 		if err != nil {
 			startTS = time.Now()
@@ -82,13 +82,13 @@ func (p *proxier) Proxy(rw http.ResponseWriter,
 		metric.ProxyLatency = latency
 		metric.Response = resp
 		metric.Error = err
-		resp.Error = shared.NewError(err)
+		resp.Error = gatekeeper.NewError(err)
 
 		// in the rare case that a plugin failed and returned a nil
 		// response, create a generic ErrorResponse denoting an
 		// internal error
 		if resp == nil {
-			resp = shared.NewErrorResponse(500, InternalError)
+			resp = gatekeeper.NewErrorResponse(500, InternalError)
 		}
 
 		p.responseToHTTPResponse(resp, httpResp)
@@ -99,8 +99,8 @@ func (p *proxier) Proxy(rw http.ResponseWriter,
 	return nil
 }
 
-func (p *proxier) modifyProxyRequest(httpReq *http.Request, req *shared.Request) {
-	if req.UpstreamMatchType == shared.PrefixUpstreamMatch {
+func (p *proxier) modifyProxyRequest(httpReq *http.Request, req *gatekeeper.Request) {
+	if req.UpstreamMatchType == gatekeeper.PrefixUpstreamMatch {
 		httpReq.URL.Path = req.PrefixlessPath
 	} else {
 		httpReq.URL.Path = req.Path
@@ -109,7 +109,7 @@ func (p *proxier) modifyProxyRequest(httpReq *http.Request, req *shared.Request)
 	httpReq.Header = req.Header
 }
 
-func (p *proxier) responseToHTTPResponse(resp *shared.Response, httpResp *http.Response) {
+func (p *proxier) responseToHTTPResponse(resp *gatekeeper.Response, httpResp *http.Response) {
 	// this should basically never happen, but if it does, then assume that
 	// that parent has handled it properly
 	if resp == nil || httpResp == nil {

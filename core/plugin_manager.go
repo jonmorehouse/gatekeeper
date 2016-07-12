@@ -151,7 +151,7 @@ func (p *pluginManager) Call(method string, cb func(Plugin) error) error {
 	calls := 0
 	defer func() {
 		if calls > 1 {
-			p.eventMetric(shared.PluginRetryEvent)
+			p.eventMetric(gatekeeper.PluginRetryEvent)
 		}
 	}()
 
@@ -249,12 +249,12 @@ func (p *pluginManager) heartbeat() {
 		return
 	}
 
-	p.eventMetric(shared.PluginRestartedEvent)
+	p.eventMetric(gatekeeper.PluginRestartedEvent)
 	p.buildInstance()
 }
 
-func (p *pluginManager) eventMetric(event shared.MetricEvent) {
-	p.metricWriter.EventMetric(&shared.EventMetric{
+func (p *pluginManager) eventMetric(event gatekeeper.MetricEvent) {
+	p.metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Timestamp: time.Now(),
 		Event:     event,
 		Extra: map[string]string{
@@ -266,7 +266,7 @@ func (p *pluginManager) eventMetric(event shared.MetricEvent) {
 }
 
 func (p *pluginManager) pluginMetric(method string, latency time.Duration, err error) {
-	p.metricWriter.PluginMetric(&shared.PluginMetric{
+	p.metricWriter.PluginMetric(&gatekeeper.PluginMetric{
 		Timestamp: time.Now(),
 		Latency:   latency,
 

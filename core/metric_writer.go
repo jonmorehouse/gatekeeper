@@ -4,17 +4,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type MetricWriter interface {
 	StartStopper
 
-	EventMetric(*shared.EventMetric)
-	ProfilingMetric(*shared.ProfilingMetric)
-	PluginMetric(*shared.PluginMetric)
-	RequestMetric(*shared.RequestMetric)
-	UpstreamMetric(*shared.UpstreamMetric)
+	EventMetric(*gatekeeper.EventMetric)
+	ProfilingMetric(*gatekeeper.ProfilingMetric)
+	PluginMetric(*gatekeeper.PluginMetric)
+	RequestMetric(*gatekeeper.RequestMetric)
+	UpstreamMetric(*gatekeeper.UpstreamMetric)
 }
 
 // MetricWriterClient is an interface which is passed around simply to write
@@ -22,11 +22,11 @@ type MetricWriter interface {
 // some sort of higher level "manager-like" type will be responsible for the
 // full lifecycle of the MetricWriter
 type MetricWriterClient interface {
-	EventMetric(*shared.EventMetric)
-	ProfilingMetric(*shared.ProfilingMetric)
-	PluginMetric(*shared.PluginMetric)
-	RequestMetric(*shared.RequestMetric)
-	UpstreamMetric(*shared.UpstreamMetric)
+	EventMetric(*gatekeeper.EventMetric)
+	ProfilingMetric(*gatekeeper.ProfilingMetric)
+	PluginMetric(*gatekeeper.PluginMetric)
+	RequestMetric(*gatekeeper.RequestMetric)
+	UpstreamMetric(*gatekeeper.UpstreamMetric)
 }
 
 // The MetricsWriter doesn't mind which metrics a plugin is interested in. For
@@ -34,23 +34,23 @@ type MetricWriterClient interface {
 // plugins that desire them. This makes it easier to pass metrics between new
 // plugin types dynamically.
 type eventMetricsReceiver interface {
-	WriteEventMetrics([]*shared.EventMetric) []error
+	WriteEventMetrics([]*gatekeeper.EventMetric) []error
 }
 
 type profilingMetricsReceiver interface {
-	WriteProfilingMetrics([]*shared.ProfilingMetric) []error
+	WriteProfilingMetrics([]*gatekeeper.ProfilingMetric) []error
 }
 
 type pluginMetricsReceiver interface {
-	WritePluginMetrics([]*shared.PluginMetric) []error
+	WritePluginMetrics([]*gatekeeper.PluginMetric) []error
 }
 
 type requestMetricsReceiver interface {
-	WriteRequestMetrics([]*shared.RequestMetric) []error
+	WriteRequestMetrics([]*gatekeeper.RequestMetric) []error
 }
 
 type upstreamMetricsReceiver interface {
-	WriteUpstreamMetrics([]*shared.UpstreamMetric) []error
+	WriteUpstreamMetrics([]*gatekeeper.UpstreamMetric) []error
 }
 
 func NewBufferedMetricsWriter(bufferSize int, flushInterval time.Duration, pluginManagers []PluginManager) MetricWriter {
@@ -59,43 +59,43 @@ func NewBufferedMetricsWriter(bufferSize int, flushInterval time.Duration, plugi
 
 		bufferSize:    bufferSize,
 		flushInterval: flushInterval,
-		buffer:        make([]shared.Metric, 0, bufferSize),
+		buffer:        make([]gatekeeper.Metric, 0, bufferSize),
 
 		stopCh:   make(chan struct{}),
 		doneCh:   make(chan struct{}),
-		bufferCh: make(chan shared.Metric, 10000),
+		bufferCh: make(chan gatekeeper.Metric, 10000),
 	}
 }
 
 type metricWriter struct {
 	pluginManagers []PluginManager
 
-	buffer        []shared.Metric
+	buffer        []gatekeeper.Metric
 	bufferSize    int
 	flushInterval time.Duration
 
 	stopCh   chan struct{}
 	doneCh   chan struct{}
-	bufferCh chan shared.Metric
+	bufferCh chan gatekeeper.Metric
 }
 
-func (m *metricWriter) EventMetric(event *shared.EventMetric) {
+func (m *metricWriter) EventMetric(event *gatekeeper.EventMetric) {
 	m.bufferCh <- event
 }
 
-func (m *metricWriter) ProfilingMetric(event *shared.ProfilingMetric) {
+func (m *metricWriter) ProfilingMetric(event *gatekeeper.ProfilingMetric) {
 	m.bufferCh <- event
 }
 
-func (m *metricWriter) PluginMetric(event *shared.PluginMetric) {
+func (m *metricWriter) PluginMetric(event *gatekeeper.PluginMetric) {
 	m.bufferCh <- event
 }
 
-func (m *metricWriter) RequestMetric(event *shared.RequestMetric) {
+func (m *metricWriter) RequestMetric(event *gatekeeper.RequestMetric) {
 	m.bufferCh <- event
 }
 
-func (m *metricWriter) UpstreamMetric(*shared.UpstreamMetric) {
+func (m *metricWriter) UpstreamMetric(*gatekeeper.UpstreamMetric) {
 	m.bufferCh <- event
 
 }
@@ -105,14 +105,14 @@ func (m *metricWriter) worker() {
 
 	flush := func() {
 		go m.flush(m.buffer)
-		m.buffer = make([]shared.Metric, 0, m.bufferSize)
+		m.buffer = make([]gatekeeper.Metric, 0, m.bufferSize)
 		timer.Reset()
 	}
 
 	defer func() {
 		timer.Stop()
 		m.flush(m.buffer)
-		m.buffer = []shared.Metric(nil)
+		m.buffer = []gatekeeper.Metric(nil)
 		m.doneCh <- struct{}{}
 	}()
 
@@ -136,29 +136,29 @@ func (m *metricWriter) worker() {
 // each buffered metric. This gives us a slice of each metric by type.	for
 // each of our plugins, we then go through them and see which metric interfaces
 // they correspond too. For each one, we send the right metrics their way.
-func (m *metricWriter) flush(buffer []shared.Metric) {
+func (m *metricWriter) flush(buffer []gatekeeper.Metric) {
 	// create buffers for each unique kind of metric
-	eventMetrics := make([]*shared.EventMetric, 0, m.bufferSize)
-	profilingMetrics := make([]*shared.ProfilingMetrics, 0, m.bufferSize)
-	pluginMetrics := make([]*shared.PluginMetrics, 0, m.bufferSize)
-	requestMetrics := make([]*shared.RequestMetric, 0, m.bufferSize)
-	upstreamMetrics := make([]*shared.UpstreamMetric, 0, m.bufferSize)
+	eventMetrics := make([]*gatekeeper.EventMetric, 0, m.bufferSize)
+	profilingMetrics := make([]*gatekeeper.ProfilingMetrics, 0, m.bufferSize)
+	pluginMetrics := make([]*gatekeeper.PluginMetrics, 0, m.bufferSize)
+	requestMetrics := make([]*gatekeeper.RequestMetric, 0, m.bufferSize)
+	upstreamMetrics := make([]*gatekeeper.UpstreamMetric, 0, m.bufferSize)
 
 	// bucket metrics by their type
 	for _, metric := range buffer {
 		switch v := metric.(type) {
-		case *shared.EventMetric:
-			eventMetrics = append(eventMetrics, event.(*shared.EventMetric))
-		case *shared.ProfilingMetric:
-			profilingMetrics = append(profilingMetrics, event.(*shared.ProfilingMetric))
-		case *shared.PluginMetric:
-			pluginMetrics = append(pluginMetrics, event.(*shared.PluginMetric))
-		case *shared.RequestMetric:
-			requestMetrics = append(requestMetrics, event.(*shared.RequestMetric))
-		case *shared.UpstreamMetric:
-			upstreamMetric = append(upstreamMetrics, event.(*shared.UpstreamMetric))
+		case *gatekeeper.EventMetric:
+			eventMetrics = append(eventMetrics, event.(*gatekeeper.EventMetric))
+		case *gatekeeper.ProfilingMetric:
+			profilingMetrics = append(profilingMetrics, event.(*gatekeeper.ProfilingMetric))
+		case *gatekeeper.PluginMetric:
+			pluginMetrics = append(pluginMetrics, event.(*gatekeeper.PluginMetric))
+		case *gatekeeper.RequestMetric:
+			requestMetrics = append(requestMetrics, event.(*gatekeeper.RequestMetric))
+		case *gatekeeper.UpstreamMetric:
+			upstreamMetric = append(upstreamMetrics, event.(*gatekeeper.UpstreamMetric))
 		default:
-			shared.ProgrammingError("unknown buffered metric")
+			gatekeeper.ProgrammingError("unknown buffered metric")
 		}
 	}
 

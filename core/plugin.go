@@ -1,6 +1,6 @@
 package core
 
-import "github.com/jonmorehouse/gatekeeper/shared"
+import "github.com/jonmorehouse/gatekeeper/gatekeeper"
 
 type Plugin interface {
 	Start() error
@@ -31,7 +31,7 @@ var pluginTypeMapping = map[PluginType]string{
 func (p PluginType) String() string {
 	desc, ok := pluginTypeMapping[p]
 	if !ok {
-		shared.ProgrammingError("PluginType string mapping not found")
+		gatekeeper.ProgrammingError("PluginType string mapping not found")
 	}
 	return desc
 }

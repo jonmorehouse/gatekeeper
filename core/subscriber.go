@@ -4,26 +4,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type Subscriber interface {
 	StartStopper
 
-	AddUpstreamEventHook(shared.Event, func(*UpstreamEvent))
+	AddUpstreamEventHook(gatekeeper.Event, func(*UpstreamEvent))
 }
 
 func NewSubscriber(broadcaster Broadcaster) Subscriber {
 	return &subscriber{
-		hooks:       make(map[shared.Event][]func(*UpstreamEvent)),
+		hooks:       make(map[gatekeeper.Event][]func(*UpstreamEvent)),
 		eventCh:     make(EventCh),
-		listenerIDs: make(map[shared.Event]ListenerID),
+		listenerIDs: make(map[gatekeeper.Event]ListenerID),
 		broadcaster: broadcaster,
 	}
 }
 
 type subscriber struct {
-	hooks map[shared.Event][]func(*UpstreamEvent)
+	hooks map[gatekeeper.Event][]func(*UpstreamEvent)
 
 	eventCh EventCh
 	doneCh  chan error
@@ -41,13 +41,13 @@ func (s *subscriber) Stop(time.Duration) error {
 	return <-s.doneCh
 }
 
-func (s *subscriber) AddUpstreamEventHook(event shared.Event, hook func(*UpstreamEvent)) error {
+func (s *subscriber) AddUpstreamEventHook(event gatekeeper.Event, hook func(*UpstreamEvent)) error {
 	// make sure that the event type is of an actual upstream event ...
-	if _, ok := map[shared.Event]struct{}{
-		shared.UpstreamAddedEvent:   struct{}{},
-		shared.UpstreamRemovedEvent: struct{}{},
-		shared.BackendAddedEvent:    struct{}{},
-		shared.BackendRemovedEvent:  struct{}{},
+	if _, ok := map[gatekeeper.Event]struct{}{
+		gatekeeper.UpstreamAddedEvent:   struct{}{},
+		gatekeeper.UpstreamRemovedEvent: struct{}{},
+		gatekeeper.BackendAddedEvent:    struct{}{},
+		gatekeeper.BackendRemovedEvent:  struct{}{},
 	}[event]; !ok {
 		return InvalidEventErr
 	}
@@ -64,11 +64,11 @@ func (s *subscriber) worker() {
 
 	// TODO update this code when listeners for non-upstream events are added
 	ch := make(EventCh, 5)
-	listenerID := s.broadcaster.AddListener(ch, []shared.EventType{
-		shared.UpstreamAddedEvent,
-		shared.UpstreamRemovedEvent,
-		shared.BackendAddedEvent,
-		shared.BackendRemovedEvent,
+	listenerID := s.broadcaster.AddListener(ch, []gatekeeper.EventType{
+		gatekeeper.UpstreamAddedEvent,
+		gatekeeper.UpstreamRemovedEvent,
+		gatekeeper.BackendAddedEvent,
+		gatekeeper.BackendRemovedEvent,
 	})
 
 	// handle an event, emitting it to all of its hooks

@@ -1,31 +1,31 @@
 package core
 
-import "github.com/jonmorehouse/gatekeeper/shared"
+import "github.com/jonmorehouse/gatekeeper/gatekeeper"
 
 type EventCh chan Event
 
-// Event is an interface, that wraps a shared.Event with additional information
+// Event is an interface, that wraps a gatekeeper.Event with additional information
 // for internal purposes. Specifically only _some_ types of data are accessible
 // through an event and we tightly control that via the interface.
 type Event interface {
-	Type() shared.Event
+	Type() gatekeeper.Event
 }
 
 type UpstreamEvent struct {
-	Event shared.Event
+	Event gatekeeper.Event
 
-	Upstream   *shared.Upstream
-	UpstreamID shared.UpsteamID
-	Backend    *shared.Backend
-	BackendID  shared.BackendID
+	Upstream   *gatekeeper.Upstream
+	UpstreamID gatekeeper.UpsteamID
+	Backend    *gatekeeper.Backend
+	BackendID  gatekeeper.BackendID
 }
 
 func (u *UpstreamEvent) UpstreamEvent() (*UpstreamEvent, error) {
-	validEvents := map[shared.Event]struct{}{
-		shared.UpstreamAddedEvent:   struct{}{},
-		shared.UpstreamRemovedEvent: struct{}{},
-		shared.BackendAddedEvent:    struct{}{},
-		shared.BackendRemovedEvent:  struct{}{},
+	validEvents := map[gatekeeper.Event]struct{}{
+		gatekeeper.UpstreamAddedEvent:   struct{}{},
+		gatekeeper.UpstreamRemovedEvent: struct{}{},
+		gatekeeper.BackendAddedEvent:    struct{}{},
+		gatekeeper.BackendRemovedEvent:  struct{}{},
 	}
 
 	if _, ok := validEvents[u.Event]; !ok {
@@ -39,7 +39,7 @@ type ListenerID string
 
 type Broadcaster interface {
 	// Add a listener accepting all events of this type on the input channel
-	AddListener(EventCh, []shared.Event) ListenerID
+	AddListener(EventCh, []gatekeeper.Event) ListenerID
 
 	// RemoveListener accepts a ListenerID and will remove it from
 	// receiving messages. This does nothing to close the channel
@@ -52,15 +52,15 @@ type Broadcaster interface {
 
 func NewBroadcaster() Broadcaster {
 	return &broadcaster{
-		eventListeners: make(map[shared.Event]map[ListenerID]EventCh),
+		eventListeners: make(map[gatekeeper.Event]map[ListenerID]EventCh),
 	}
 }
 
 type broadcaster struct {
-	eventListeners map[shared.Event]map[ListenerID]EventCh
+	eventListeners map[gatekeeper.Event]map[ListenerID]EventCh
 }
 
-func (b *broadcaster) AddListener(ch EventCh, events []shared.Event) ListenerID {
+func (b *broadcaster) AddListener(ch EventCh, events []gatekeeper.Event) ListenerID {
 	listenerID := ListenerID(NewUUID())
 	for _, event := range events {
 		listeners, found := b.eventListeners[event]

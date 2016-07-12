@@ -8,7 +8,7 @@ import (
 type LoadBalancer interface {
 	StartStopper
 
-	GetBackend(shared.UpstreamID) (*shared.Backend, error)
+	GetBackend(gatekeeper.UpstreamID) (*gatekeeper.Backend, error)
 }
 
 func NewLocalLoadBalancer(broadcaster Broadcaster) LoadBalancer {
@@ -18,18 +18,18 @@ func NewLocalLoadBalancer(broadcaster Broadcaster) LoadBalancer {
 }
 
 type localLoadBalancer struct {
-	backends map[shared.UpstreamID]map[shared.BackendID]*shared.Backend
+	backends map[gatekeeper.UpstreamID]map[gatekeeper.BackendID]*gatekeeper.Backend
 
 	sync.RWMutex
 }
 
 func (l *localLoadBalancer) Start() error {
-	l.subscriber.AddUpstreamEventhook(shared.BackendAddedEvent, l.addBackendHook)
-	l.subscriber.AddUpstreamEventhook(shared.BackendRemovedEvent, l.removeBackendHook)
+	l.subscriber.AddUpstreamEventhook(gatekeeper.BackendAddedEvent, l.addBackendHook)
+	l.subscriber.AddUpstreamEventhook(gatekeeper.BackendRemovedEvent, l.removeBackendHook)
 	return l.subscriber.Start()
 }
 
-func (l *localLoadBalancer) GetBackend(upstreamID *shared.UpstreamID) (*shared.Backend, error) {
+func (l *localLoadBalancer) GetBackend(upstreamID *gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {
 	l.RLock()
 	defer l.RUnlock()
 
@@ -53,7 +53,7 @@ func (l *localLoadBalancer) addBackendHook(event *UpstreamEvent) {
 
 	_, ok := l.backends[event.UpstreamID]
 	if !ok {
-		l.backends[event.UpstreamID] = make(map[shared.BackendID]*shared.Backend)
+		l.backends[event.UpstreamID] = make(map[gatekeeper.BackendID]*gatekeeper.Backend)
 	}
 
 	l.backends[event.UpstreamID][event.BackendID] = event.Backend
@@ -88,13 +88,13 @@ type pluginLoadBalancer struct {
 }
 
 func (l *pluginLoadBalancer) Start() error {
-	l.subscriber.AddHook(shared.BackendAddedEvent, l.backendAddedHook)
-	l.subscriber.AddHook(shared.BackendRemovedEvent, l.backendRemovedHook)
+	l.subscriber.AddHook(gatekeeper.BackendAddedEvent, l.backendAddedHook)
+	l.subscriber.AddHook(gatekeeper.BackendRemovedEvent, l.backendRemovedHook)
 	return l.subscriber.Start()
 }
 
-func (l *pluginLoadBalancer) GetBackend(upstreamID shared.UpstreamID) (*shared.Backend, error) {
-	var backend *shared.Backend
+func (l *pluginLoadBalancer) GetBackend(upstreamID gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {
+	var backend *gatekeeper.Backend
 	var err error
 
 	l.pluginManager.Call("GetBackend", func(plugin Plugin) error {
