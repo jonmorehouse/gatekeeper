@@ -1,81 +1,51 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"net/rpc"
-	"os/exec"
-
-	"github.com/hashicorp/go-plugin"
+	"github.com/jonmorehouse/gatekeeper/internal"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
-// Plugin is the interface which individual plugins implement and pass into the
-// Plugin interface. This package is responsible for building the scaffolding
-// around exposing the interface over RPC so that parent processes can talk to
-// the LoadBalancer plugin as needed.
+// Plugin is the interface which a plugin will implement and pass to `RunPlugin`
 type Plugin interface {
-	Start() error
-	Stop() error
-	Configure(map[string]interface{}) error
-	Heartbeat() error
+	// internal.Plugin exposes the following methods, per:
+	// https://github.com/jonmorehouse/gateekeeper/tree/master/internal/plugin.go
+	//
+	// Start() error
+	// Stop() error
+	// Heartbeat() error
+	// Configure(map[string]interface{}) error
+	//
+	internal.BasePlugin
 
 	AddBackend(shared.UpstreamID, *shared.Backend) error
 	RemoveBackend(*shared.Backend) error
+	UpstreamMetric(*shared.UpstreamMetric) error
 	GetBackend(shared.UpstreamID) (*shared.Backend, error)
 }
 
-// PluginClient is the interface which users of the
-// loadbalancer_plugin.NewClient are exposed to. Specifically, this wraps a
-// PluginRPC type and a plugin.Client allowing us to transparently make calls
-// over RPC to the Plugin interface, as well as gives us the ability to kill
-// the underlying connection to the plugin process.
+// PluginClient in this case is the gatekeeper/core application. PluginClient
+// is the interface that the user of this plugin sees and is simply a wrapper
+// around *RPCClient. This is merely a wrapper which returns a clean interface
+// with error interfaces instead of *shared.Error types
 type PluginClient interface {
-	Configure(map[string]interface{}) error
-	Heartbeat() error
-	Start() error
-	Stop() error
-
-	// kill the underlying RPC connection, this should normally be a NOOP
-	// under the hood, but in the case of a plugin Stop() timing out, we
-	// can ensure that no ghost processes are left behind.
-	Kill()
+	internal.BasePlugin
 
 	AddBackend(shared.UpstreamID, *shared.Backend) error
 	RemoveBackend(*shared.Backend) error
 	GetBackend(shared.UpstreamID) (*shared.Backend, error)
+	WriteUpstreamMetrics([]*shared.UpstreamMetric) []error
 }
 
-// pluginClient implements the PluginClient interface, wrapping a PluginRPC and plugin.Client connection
-type pluginClient struct {
-	pluginRPC PluginRPC
-	client    *plugin.Client
-}
-
-func NewPluginClient(pluginRPC PluginRPC, client *plugin.Client) PluginClient {
+func NewPluginClient(rpcClient *RPCClient) PluginClient {
 	return &pluginClient{
-		pluginRPC: pluginRPC,
-		client:    client,
+		rpcClient,
+		internal.NewBasePluginClient(rpcClient),
 	}
 }
 
-func (p *pluginClient) Start() error {
-	return shared.ErrorToError(p.pluginRPC.Start())
-}
-
-func (p *pluginClient) Stop() error {
-	return shared.ErrorToError(p.pluginRPC.Stop())
-}
-
-func (p *pluginClient) Configure(opts map[string]interface{}) error {
-	return shared.ErrorToError(p.pluginRPC.Configure(opts))
-}
-
-func (p *pluginClient) Heartbeat() error {
-	return shared.ErrorToError(p.pluginRPC.Heartbeat())
-}
-
-func (p *pluginClient) Kill() {
-	p.client.Kill()
+type pluginClient struct {
+	pluginRPC *RPCClient
+	*internal.BasePluginClient
 }
 
 func (p *pluginClient) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
@@ -86,81 +56,12 @@ func (p *pluginClient) RemoveBackend(backend *shared.Backend) error {
 	return shared.ErrorToError(p.pluginRPC.RemoveBackend(backend))
 }
 
+func (p *pluginClient) WriteUpstreamMetrics(metrics []*shared.UpstreamMetric) []error {
+	errs := p.pluginRPC.UpstreamMetric(metrics)
+	return shared.ErrorsToErrors(errs)
+}
+
 func (p *pluginClient) GetBackend(upstreamID shared.UpstreamID) (*shared.Backend, error) {
 	backend, err := p.pluginRPC.GetBackend(upstreamID)
 	return backend, shared.ErrorToError(err)
-}
-
-// PluginRPC is an RPC compatible interface that exposes the Plugin interface
-// in an RPC safe way.
-type PluginRPC interface {
-	Start() *shared.Error
-	Stop() *shared.Error
-	Configure(map[string]interface{}) *shared.Error
-	Heartbeat() *shared.Error
-
-	AddBackend(shared.UpstreamID, *shared.Backend) *shared.Error
-	RemoveBackend(*shared.Backend) *shared.Error
-	GetBackend(shared.UpstreamID) (*shared.Backend, *shared.Error)
-}
-
-type PluginDispenser struct {
-	// this is the actual plugin's implementation of the plugin interface.
-	// Everything in this package just proxies requests to this object.
-	impl Plugin
-}
-
-func (d PluginDispenser) Server(b *plugin.MuxBroker) (interface{}, error) {
-	return &RPCServer{broker: b, impl: d.impl}, nil
-}
-
-func (d PluginDispenser) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
-	return &RPCClient{broker: b, client: c}, nil
-}
-
-// This is the method that a plugin will call to start serving traffic over the
-// plugin interface. Specifically, this will start the RPC server and register
-// etc.
-func RunPlugin(name string, impl Plugin) error {
-	pluginDispenser := PluginDispenser{impl: impl}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: Handshake,
-		Plugins: map[string]plugin.Plugin{
-			name: &pluginDispenser,
-		},
-	})
-	return nil
-}
-
-func NewClient(name string, cmd string) (PluginClient, error) {
-	pluginDispenser := PluginDispenser{}
-
-	client := plugin.NewClient(&plugin.ClientConfig{
-		HandshakeConfig: Handshake,
-		Plugins: map[string]plugin.Plugin{
-			name: &pluginDispenser,
-		},
-		Cmd: exec.Command(cmd),
-	})
-
-	rpcClient, err := client.Client()
-	if err != nil {
-		client.Kill()
-		return nil, err
-	}
-
-	rawPlugin, err := rpcClient.Dispense(name)
-	if err != nil {
-		client.Kill()
-		return nil, err
-	}
-
-	pluginRPC, ok := rawPlugin.(PluginRPC)
-	if !ok {
-		client.Kill()
-		return nil, fmt.Errorf("Unable to cast dispensed plugin to a PluginRPC type")
-	}
-
-	return NewPluginClient(pluginRPC, client), nil
 }

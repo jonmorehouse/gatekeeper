@@ -74,6 +74,11 @@ func (l *LoadBalancer) RemoveBackend(deleted *shared.Backend) error {
 	return nil
 }
 
+func (l *LoadBalancer) UpstreamMetric(metric *shared.UpstreamMetric) error {
+	log.Println("upstream metric ...")
+	return nil
+}
+
 func (l *LoadBalancer) GetBackend(upstream shared.UpstreamID) (*shared.Backend, error) {
 	backends, found := l.upstreamBackends[upstream]
 	if !found {

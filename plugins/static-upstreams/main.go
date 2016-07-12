@@ -19,6 +19,7 @@ const (
 	InvalidConfigFileError
 	EmptyConfigError
 	UpstreamNameRequiredError
+	NoManagerErr
 )
 
 func (e Error) Error() string {
@@ -31,6 +32,8 @@ func (e Error) Error() string {
 		return "no upstreams found in -upstream-config file"
 	case UpstreamNameRequiredError:
 		return "name attribute required for each upstream"
+	case NoManagerErr:
+		return "no manager error"
 	default:
 	}
 
@@ -124,8 +127,10 @@ func (s *staticUpstreams) Configure(args map[string]interface{}) error {
 
 func (s *staticUpstreams) Heartbeat() error { return nil }
 
-func (s *staticUpstreams) Start(manager upstream_plugin.Manager) error {
-	s.manager = manager
+func (s *staticUpstreams) Start() error {
+	if s.manager == nil {
+		return NoManagerErr
+	}
 
 	// emit each upstream and its backends to the parent process
 	for _, item := range s.data {
@@ -162,6 +167,13 @@ func (s *staticUpstreams) Stop() error {
 
 	return err
 }
+
+func (s *staticUpstreams) SetManager(manager upstream_plugin.Manager) error {
+	s.manager = manager
+	return nil
+}
+
+func (s *staticUpstreams) UpstreamMetric(metric *shared.UpstreamMetric) error { return nil }
 
 // loads and parses a configFile, returning a `MultiUpstreams` dictionary or an error
 func (s *staticUpstreams) parseConfig(rawPath string) (Config, error) {

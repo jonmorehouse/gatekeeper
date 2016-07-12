@@ -35,6 +35,22 @@ func ErrorToError(e *Error) error {
 	return e
 }
 
+func ErrorsToErrors(input []*Error) []error {
+	if len(input) == 0 {
+		return nil
+	}
+
+	errs := make([]error, 0, len(input))
+	for _, sharedErr := range input {
+		err := ErrorToError(sharedErr)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
+}
+
 var ProgrammingErrorFatal bool
 
 // ProgrammingError's should not happen in normal operations

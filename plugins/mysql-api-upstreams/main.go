@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -9,6 +10,8 @@ import (
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 	"github.com/jonmorehouse/gatekeeper/shared"
 )
+
+var NoManagerErr = errors.New("No manager set")
 
 type MultiError interface {
 	Add(error)
@@ -76,8 +79,10 @@ type Plugin struct {
 	apiBackend  *shared.Backend
 }
 
-func (p *Plugin) Start(rpcManager upstream_plugin.Manager) error {
-	p.rpcManager = rpcManager
+func (p *Plugin) Start() error {
+	if p.rpcManager == nil {
+		return NoManagerErr
+	}
 
 	database := NewDatabase()
 	if err := database.Connect(p.config.DataSourceName); err != nil {
@@ -167,6 +172,16 @@ func (p *Plugin) Stop() error {
 
 func (p *Plugin) Heartbeat() error {
 	log.Println("plugin:mysql-upstreams-api received heartbeat from parent process")
+	return nil
+}
+
+func (p *Plugin) SetManager(manager upstream_plugin.Manager) error {
+	p.rpcManager = manager
+	return nil
+}
+
+func (p *Plugin) UpstreamMetric(metric *shared.UpstreamMetric) error {
+	log.Println("upstream metric ...")
 	return nil
 }
 
