@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 // BasePlugin is the most general implementation that any plugin must
@@ -22,10 +22,10 @@ type BasePlugin interface {
 // allows us to pass in RPCClients from different plugin packages, of different
 // types, as long as they meet this interface
 type basePluginRPCClient interface {
-	Start() *shared.Error
-	Stop() *shared.Error
-	Configure(map[string]interface{}) *shared.Error
-	Heartbeat() *shared.Error
+	Start() *gatekeeper.Error
+	Stop() *gatekeeper.Error
+	Configure(map[string]interface{}) *gatekeeper.Error
+	Heartbeat() *gatekeeper.Error
 }
 
 type BasePluginClient struct {
