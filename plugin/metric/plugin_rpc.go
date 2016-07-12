@@ -5,42 +5,42 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/jonmorehouse/gatekeeper/internal"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type eventMetricArgs struct {
-	Metrics []*shared.EventMetric
+	Metrics []*gatekeeper.EventMetric
 }
 type eventMetricResp struct {
-	Errs []*shared.Error
+	Errs []*gatekeeper.Error
 }
 
 type profilingMetricArgs struct {
-	Metrics []*shared.ProfilingMetric
+	Metrics []*gatekeeper.ProfilingMetric
 }
 type profilingMetricResp struct {
-	Errs []*shared.Error
+	Errs []*gatekeeper.Error
 }
 
 type pluginMetricArgs struct {
-	Metrics []*shared.PluginMetric
+	Metrics []*gatekeeper.PluginMetric
 }
 type pluginMetricResp struct {
-	Errs []*shared.Error
+	Errs []*gatekeeper.Error
 }
 
 type requestMetricArgs struct {
-	Metrics []*shared.RequestMetric
+	Metrics []*gatekeeper.RequestMetric
 }
 type requestMetricResp struct {
-	Errs []*shared.Error
+	Errs []*gatekeeper.Error
 }
 
 type upstreamMetricArgs struct {
-	Metrics []*shared.UpstreamMetric
+	Metrics []*gatekeeper.UpstreamMetric
 }
 type upstreamMetricResp struct {
-	Errs []*shared.Error
+	Errs []*gatekeeper.Error
 }
 
 // PluginRPC is a representation of the Plugin interface that is RPC safe. It
@@ -53,53 +53,53 @@ type RPCClient struct {
 	*internal.BasePluginRPCClient
 }
 
-func (c *RPCClient) ProfilingMetric(metrics []*shared.ProfilingMetric) []*shared.Error {
+func (c *RPCClient) ProfilingMetric(metrics []*gatekeeper.ProfilingMetric) []*gatekeeper.Error {
 	callArgs := profilingMetricArgs{
 		Metrics: metrics,
 	}
 	callResp := profilingMetricResp{}
 
 	if err := c.client.Call("Plugin.ProfilingMetric", &callArgs, &callResp); err != nil {
-		return []*shared.Error{shared.NewError(err)}
+		return []*gatekeeper.Error{gatekeeper.NewError(err)}
 	}
 
 	return callResp.Errs
 }
 
-func (c *RPCClient) PluginMetric(metrics []*shared.PluginMetric) []*shared.Error {
+func (c *RPCClient) PluginMetric(metrics []*gatekeeper.PluginMetric) []*gatekeeper.Error {
 	callArgs := pluginMetricArgs{
 		Metrics: metrics,
 	}
 	callResp := pluginMetricResp{}
 
 	if err := c.client.Call("Plugin.PluginMetric", &callArgs, &callResp); err != nil {
-		return []*shared.Error{shared.NewError(err)}
+		return []*gatekeeper.Error{gatekeeper.NewError(err)}
 	}
 
 	return callResp.Errs
 }
 
-func (c *RPCClient) RequestMetric(metrics []*shared.RequestMetric) []*shared.Error {
+func (c *RPCClient) RequestMetric(metrics []*gatekeeper.RequestMetric) []*gatekeeper.Error {
 	callArgs := requestMetricArgs{
 		Metrics: metrics,
 	}
 	callResp := requestMetricResp{}
 
 	if err := c.client.Call("Plugin.RequestMetric", &callArgs, &callResp); err != nil {
-		return []*shared.Error{shared.NewError(err)}
+		return []*gatekeeper.Error{gatekeeper.NewError(err)}
 	}
 
 	return callResp.Errs
 }
 
-func (c *RPCClient) UpstreamMetric(metrics []*shared.UpstreamMetric) []*shared.Error {
+func (c *RPCClient) UpstreamMetric(metrics []*gatekeeper.UpstreamMetric) []*gatekeeper.Error {
 	callArgs := upstreamMetricArgs{
 		Metrics: metrics,
 	}
 	callResp := upstreamMetricResp{}
 
 	if err := c.client.Call("Plugin.UpstreamMetric", &callArgs, &callResp); err != nil {
-		return []*shared.Error{shared.NewError(err)}
+		return []*gatekeeper.Error{gatekeeper.NewError(err)}
 	}
 
 	return callResp.Errs
@@ -113,10 +113,10 @@ type RPCServer struct {
 }
 
 func (s *RPCServer) EventMetric(args *eventMetricArgs, resp *eventMetricResp) error {
-	errs := make([]*shared.Error, 0, len(args.Metrics))
+	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.EventMetric(metric); err != nil {
-			errs = append(errs, shared.NewError(err))
+			errs = append(errs, gatekeeper.NewError(err))
 		}
 	}
 
@@ -125,10 +125,10 @@ func (s *RPCServer) EventMetric(args *eventMetricArgs, resp *eventMetricResp) er
 }
 
 func (s *RPCServer) ProfilingMetric(args *profilingMetricArgs, resp *profilingMetricResp) error {
-	errs := make([]*shared.Error, 0, len(args.Metrics))
+	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.ProfilingMetric(metric); err != nil {
-			errs = append(errs, shared.NewError(err))
+			errs = append(errs, gatekeeper.NewError(err))
 		}
 	}
 
@@ -137,10 +137,10 @@ func (s *RPCServer) ProfilingMetric(args *profilingMetricArgs, resp *profilingMe
 }
 
 func (s *RPCServer) PluginMetric(args *pluginMetricArgs, resp *pluginMetricResp) error {
-	errs := make([]*shared.Error, 0, len(args.Metrics))
+	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.PluginMetric(metric); err != nil {
-			errs = append(errs, shared.NewError(err))
+			errs = append(errs, gatekeeper.NewError(err))
 		}
 	}
 
@@ -149,10 +149,10 @@ func (s *RPCServer) PluginMetric(args *pluginMetricArgs, resp *pluginMetricResp)
 }
 
 func (s *RPCServer) RequestMetric(args *requestMetricArgs, resp *requestMetricResp) error {
-	errs := make([]*shared.Error, 0, len(args.Metrics))
+	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.RequestMetric(metric); err != nil {
-			errs = append(errs, shared.NewError(err))
+			errs = append(errs, gatekeeper.NewError(err))
 		}
 	}
 
@@ -161,10 +161,10 @@ func (s *RPCServer) RequestMetric(args *requestMetricArgs, resp *requestMetricRe
 }
 
 func (s *RPCServer) UpstreamMetric(args *upstreamMetricArgs, resp *upstreamMetricResp) error {
-	errs := make([]*shared.Error, 0, len(args.Metrics))
+	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.UpstreamMetric(metric); err != nil {
-			errs = append(errs, shared.NewError(err))
+			errs = append(errs, gatekeeper.NewError(err))
 		}
 	}
 
@@ -172,14 +172,14 @@ func (s *RPCServer) UpstreamMetric(args *upstreamMetricArgs, resp *upstreamMetri
 	return nil
 }
 
-func (c *RPCClient) EventMetric(metrics []*shared.EventMetric) []*shared.Error {
+func (c *RPCClient) EventMetric(metrics []*gatekeeper.EventMetric) []*gatekeeper.Error {
 	callArgs := eventMetricArgs{
 		Metrics: metrics,
 	}
 	callResp := eventMetricResp{}
 
 	if err := c.client.Call("Plugin.EventMetric", &callArgs, &callResp); err != nil {
-		return []*shared.Error{shared.NewError(err)}
+		return []*gatekeeper.Error{gatekeeper.NewError(err)}
 	}
 
 	return callResp.Errs

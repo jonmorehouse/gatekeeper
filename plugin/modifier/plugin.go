@@ -2,7 +2,7 @@ package modifier
 
 import (
 	"github.com/jonmorehouse/gatekeeper/internal"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 // Plugin is the interface which a plugin will implement and pass to `RunPlugin`
@@ -26,7 +26,7 @@ type Plugin interface {
 	// directly where as an error will trigger the ErrorResponse method.
 	// Returning an error from this method should only be done in
 	// extenuating circumstances and will trigger an internal error
-	ModifyRequest(*shared.Request) (*shared.Request, error)
+	ModifyRequest(*gatekeeper.Request) (*gatekeeper.Request, error)
 
 	// Modify the response, changing any attributes, headers, the body,
 	// that are desired before sending the response back to the client.
@@ -34,24 +34,24 @@ type Plugin interface {
 	// extenuating circumstance and/or when the response body can be
 	// dropped all together. Most likely speaking, that would only be in
 	// the case of a fatal failure such as datastore being down etc.
-	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
+	ModifyResponse(*gatekeeper.Request, *gatekeeper.Response) (*gatekeeper.Response, error)
 
 	// Modify a response that was flagged as an error. This is similar to
 	// the ModifyResponse method, again giving complete control over the
 	// response that is written back to the client.
-	ModifyErrorResponse(error, *shared.Request, *shared.Response) (*shared.Response, error)
+	ModifyErrorResponse(error, *gatekeeper.Request, *gatekeeper.Response) (*gatekeeper.Response, error)
 }
 
 // PluginClient in this case is the gatekeeper/core application. PluginClient
 // is the interface that the user of this plugin sees and is simply a wrapper
 // around *RPCClient. This is merely a wrapper which returns a clean interface
-// with error interfaces instead of *shared.Error types
+// with error interfaces instead of *gatekeeper.Error types
 type PluginClient interface {
 	internal.BasePlugin
 
-	ModifyRequest(*shared.Request) (*shared.Request, error)
-	ModifyResponse(*shared.Request, *shared.Response) (*shared.Response, error)
-	ModifyErrorResponse(error, *shared.Request, *shared.Response) (*shared.Response, error)
+	ModifyRequest(*gatekeeper.Request) (*gatekeeper.Request, error)
+	ModifyResponse(*gatekeeper.Request, *gatekeeper.Response) (*gatekeeper.Response, error)
+	ModifyErrorResponse(error, *gatekeeper.Request, *gatekeeper.Response) (*gatekeeper.Response, error)
 }
 
 func NewPluginClient(rpcClient *RPCClient) PluginClient {
@@ -66,15 +66,15 @@ type pluginClient struct {
 	*internal.BasePluginClient
 }
 
-func (p *pluginClient) ModifyRequest(req *shared.Request) (*shared.Request, error) {
+func (p *pluginClient) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
 	req, err := p.pluginRPC.ModifyRequest(req)
-	return req, shared.ErrorToError(err)
+	return req, gatekeeper.ErrorToError(err)
 }
 
-func (p *pluginClient) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, error) {
+func (p *pluginClient) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
 	return p.pluginRPC.ModifyResponse(req, resp)
 }
 
-func (p *pluginClient) ModifyErrorResponse(respErr error, req *shared.Request, resp *shared.Response) (*shared.Response, error) {
-	return p.pluginRPC.ModifyErrorResponse(shared.NewError(respErr), req, resp)
+func (p *pluginClient) ModifyErrorResponse(respErr error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+	return p.pluginRPC.ModifyErrorResponse(gatekeeper.NewError(respErr), req, resp)
 }

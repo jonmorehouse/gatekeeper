@@ -5,36 +5,36 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/jonmorehouse/gatekeeper/internal"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type modifyRequestArgs struct {
-	Request *shared.Request
+	Request *gatekeeper.Request
 }
 type modifyRequestResp struct {
-	Request *shared.Request
-	Err     *shared.Error
+	Request *gatekeeper.Request
+	Err     *gatekeeper.Error
 }
 
 type modifyResponseArgs struct {
-	Request  *shared.Request
-	Response *shared.Response
+	Request  *gatekeeper.Request
+	Response *gatekeeper.Response
 }
 
 type modifyResponseResp struct {
-	Response *shared.Response
-	Err      *shared.Error
+	Response *gatekeeper.Response
+	Err      *gatekeeper.Error
 }
 
 type modifyErrorResponseArgs struct {
-	Err      *shared.Error
-	Request  *shared.Request
-	Response *shared.Response
+	Err      *gatekeeper.Error
+	Request  *gatekeeper.Request
+	Response *gatekeeper.Response
 }
 
 type modifyErrorResponseResp struct {
-	Response *shared.Response
-	Err      *shared.Error
+	Response *gatekeeper.Response
+	Err      *gatekeeper.Error
 }
 
 // PluginRPC is a representation of the Plugin interface that is RPC safe. It
@@ -47,18 +47,18 @@ type RPCClient struct {
 	*internal.BasePluginRPCClient
 }
 
-func (c *RPCClient) ModifyRequest(req *shared.Request) (*shared.Request, *shared.Error) {
+func (c *RPCClient) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, *gatekeeper.Error) {
 	callArgs := modifyRequestArgs{
 		Request: req,
 	}
 	callResp := modifyRequestResp{}
 	if err := c.client.Call("Plugin.ModifyRequest", &callArgs, &callResp); err != nil {
-		return nil, shared.NewError(err)
+		return nil, gatekeeper.NewError(err)
 	}
 	return callResp.Request, callResp.Err
 }
 
-func (c *RPCClient) ModifyResponse(req *shared.Request, resp *shared.Response) (*shared.Response, *shared.Error) {
+func (c *RPCClient) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, *gatekeeper.Error) {
 	callArgs := modifyResponseArgs{
 		Request:  req,
 		Response: resp,
@@ -66,13 +66,13 @@ func (c *RPCClient) ModifyResponse(req *shared.Request, resp *shared.Response) (
 	callResp := modifyResponseResp{}
 
 	if err := c.client.Call("Plugin.ModifyResponse", &callArgs, &callResp); err != nil {
-		return nil, shared.NewError(err)
+		return nil, gatekeeper.NewError(err)
 	}
 
 	return callResp.Response, callResp.Err
 }
 
-func (c *RPCClient) ModifyErrorResponse(err *shared.Error, req *shared.Request, resp *shared.Response) (*shared.Response, *shared.Error) {
+func (c *RPCClient) ModifyErrorResponse(err *gatekeeper.Error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, *gatekeeper.Error) {
 	callArgs := modifyErrorResponseArgs{
 		Err:      err,
 		Request:  req,
@@ -81,7 +81,7 @@ func (c *RPCClient) ModifyErrorResponse(err *shared.Error, req *shared.Request, 
 	callResp := modifyErrorResponseResp{}
 
 	if err := c.client.Call("Plugin.ModifyErrorResponse", &callArgs, &callResp); err != nil {
-		return nil, shared.NewError(err)
+		return nil, gatekeeper.NewError(err)
 	}
 	return callResp.Response, callResp.Err
 }
@@ -95,21 +95,21 @@ type RPCServer struct {
 
 func (s *RPCServer) ModifyRequest(args *modifyRequestArgs, resp *modifyRequestResp) error {
 	request, err := s.impl.ModifyRequest(args.Request)
-	resp.Err = shared.NewError(err)
+	resp.Err = gatekeeper.NewError(err)
 	resp.Request = request
 	return nil
 }
 
 func (s *RPCServer) ModifyResponse(args *modifyResponseArgs, resp *modifyResponseResp) error {
 	response, err := s.impl.ModifyResponse(args.Request, args.Response)
-	resp.Err = shared.NewError(err)
+	resp.Err = gatekeeper.NewError(err)
 	resp.Response = response
 	return nil
 }
 
 func (s *RPCServer) ModifyErrorResponse(args *modifyErrorResponseArgs, resp *modifyErrorResponseResp) error {
 	response, err := s.impl.ModifyErrorResponse(args.Err, args.Request, args.Response)
-	resp.Err = shared.NewError(err)
+	resp.Err = gatekeeper.NewError(err)
 	resp.Response = response
 	return nil
 }

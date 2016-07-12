@@ -1,7 +1,7 @@
 package metric
 
 import (
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 
 	"github.com/jonmorehouse/gatekeeper/internal"
 )
@@ -18,26 +18,26 @@ type Plugin interface {
 	//
 	internal.BasePlugin
 
-	EventMetric(*shared.EventMetric) error
-	ProfilingMetric(*shared.ProfilingMetric) error
-	PluginMetric(*shared.PluginMetric) error
-	RequestMetric(*shared.RequestMetric) error
-	UpstreamMetric(*shared.UpstreamMetric) error
+	EventMetric(*gatekeeper.EventMetric) error
+	ProfilingMetric(*gatekeeper.ProfilingMetric) error
+	PluginMetric(*gatekeeper.PluginMetric) error
+	RequestMetric(*gatekeeper.RequestMetric) error
+	UpstreamMetric(*gatekeeper.UpstreamMetric) error
 }
 
 // PluginClient in this case is the gatekeeper/core application. PluginClient
 // is the interface that the user of this plugin sees and is simply a wrapper
 // around *RPCClient. This is merely a wrapper which returns a clean interface
-// with error interfaces instead of *shared.Error types
+// with error interfaces instead of *gatekeeper.Error types
 type PluginClient interface {
 	internal.BasePlugin
 
 	// Metrics are batch written over RPC on the client side, so as to allow for less noise over the wire
-	WriteEventMetrics([]*shared.EventMetric) []error
-	WriteProfilingMetrics([]*shared.ProfilingMetric) []error
-	WritePluginMetrics([]*shared.PluginMetric) []error
-	WriteRequestMetrics([]*shared.RequestMetric) []error
-	WriteUpstreamMetrics([]*shared.UpstreamMetric) []error
+	WriteEventMetrics([]*gatekeeper.EventMetric) []error
+	WriteProfilingMetrics([]*gatekeeper.ProfilingMetric) []error
+	WritePluginMetrics([]*gatekeeper.PluginMetric) []error
+	WriteRequestMetrics([]*gatekeeper.RequestMetric) []error
+	WriteUpstreamMetrics([]*gatekeeper.UpstreamMetric) []error
 }
 
 func NewPluginClient(rpcClient *RPCClient) PluginClient {
@@ -52,27 +52,27 @@ type pluginClient struct {
 	*internal.BasePluginClient
 }
 
-func (p *pluginClient) WriteEventMetrics(metrics []*shared.EventMetric) []error {
+func (p *pluginClient) WriteEventMetrics(metrics []*gatekeeper.EventMetric) []error {
 	errs := p.pluginRPC.EventMetric(metrics)
-	return shared.ErrorsToErrors(errs)
+	return gatekeeper.ErrorsToErrors(errs)
 }
 
-func (p *pluginClient) WriteProfilingMetrics(metrics []*shared.ProfilingMetric) []error {
+func (p *pluginClient) WriteProfilingMetrics(metrics []*gatekeeper.ProfilingMetric) []error {
 	errs := p.pluginRPC.ProfilingMetric(metrics)
-	return shared.ErrorsToErrors(errs)
+	return gatekeeper.ErrorsToErrors(errs)
 }
 
-func (p *pluginClient) WritePluginMetrics(metrics []*shared.PluginMetric) []error {
+func (p *pluginClient) WritePluginMetrics(metrics []*gatekeeper.PluginMetric) []error {
 	errs := p.pluginRPC.PluginMetric(metrics)
-	return shared.ErrorsToErrors(errs)
+	return gatekeeper.ErrorsToErrors(errs)
 }
 
-func (p *pluginClient) WriteRequestMetrics(metrics []*shared.RequestMetric) []error {
+func (p *pluginClient) WriteRequestMetrics(metrics []*gatekeeper.RequestMetric) []error {
 	errs := p.pluginRPC.RequestMetric(metrics)
-	return shared.ErrorsToErrors(errs)
+	return gatekeeper.ErrorsToErrors(errs)
 }
 
-func (p *pluginClient) WriteUpstreamMetrics(metrics []*shared.UpstreamMetric) []error {
+func (p *pluginClient) WriteUpstreamMetrics(metrics []*gatekeeper.UpstreamMetric) []error {
 	errs := p.pluginRPC.UpstreamMetric(metrics)
-	return shared.ErrorsToErrors(errs)
+	return gatekeeper.ErrorsToErrors(errs)
 }

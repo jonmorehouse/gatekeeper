@@ -1,28 +1,28 @@
 package upstream
 
 import (
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type Manager interface {
-	AddUpstream(*shared.Upstream) error
-	RemoveUpstream(shared.UpstreamID) error
+	AddUpstream(*gatekeeper.Upstream) error
+	RemoveUpstream(gatekeeper.UpstreamID) error
 
-	AddBackend(shared.UpstreamID, *shared.Backend) error
-	RemoveBackend(shared.BackendID) error
+	AddBackend(gatekeeper.UpstreamID, *gatekeeper.Backend) error
+	RemoveBackend(gatekeeper.BackendID) error
 }
 
 type ManagerRPC interface {
-	AddUpstream(*shared.Upstream) *shared.Error
-	RemoveUpstream(shared.UpstreamID) *shared.Error
+	AddUpstream(*gatekeeper.Upstream) *gatekeeper.Error
+	RemoveUpstream(gatekeeper.UpstreamID) *gatekeeper.Error
 
-	AddBackend(shared.UpstreamID, *shared.Backend) *shared.Error
-	RemoveBackend(shared.BackendID) *shared.Error
+	AddBackend(gatekeeper.UpstreamID, *gatekeeper.Backend) *gatekeeper.Error
+	RemoveBackend(gatekeeper.BackendID) *gatekeeper.Error
 
 	// NOTE this method is not accessible to the plugin implemeneter, it's
 	// used internally to ensure that the plugin is still connected back to
 	// the parent process via RPC.
-	Heartbeat() *shared.Error
+	Heartbeat() *gatekeeper.Error
 }
 
 // ManagerClient is a client which wraps a ManagerRPC implementing type and
@@ -33,18 +33,18 @@ type ManagerClient struct {
 	ManagerRPC ManagerRPC
 }
 
-func (m *ManagerClient) AddUpstream(upstream *shared.Upstream) error {
-	return shared.ErrorToError(m.ManagerRPC.AddUpstream(upstream))
+func (m *ManagerClient) AddUpstream(upstream *gatekeeper.Upstream) error {
+	return gatekeeper.ErrorToError(m.ManagerRPC.AddUpstream(upstream))
 }
 
-func (m *ManagerClient) RemoveUpstream(upstreamID shared.UpstreamID) error {
-	return shared.ErrorToError(m.ManagerRPC.RemoveUpstream(upstreamID))
+func (m *ManagerClient) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error {
+	return gatekeeper.ErrorToError(m.ManagerRPC.RemoveUpstream(upstreamID))
 }
 
-func (m *ManagerClient) AddBackend(upstreamID shared.UpstreamID, backend *shared.Backend) error {
-	return shared.ErrorToError(m.ManagerRPC.AddBackend(upstreamID, backend))
+func (m *ManagerClient) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
+	return gatekeeper.ErrorToError(m.ManagerRPC.AddBackend(upstreamID, backend))
 }
 
-func (m *ManagerClient) RemoveBackend(backendID shared.BackendID) error {
-	return shared.ErrorToError(m.ManagerRPC.RemoveBackend(backendID))
+func (m *ManagerClient) RemoveBackend(backendID gatekeeper.BackendID) error {
+	return gatekeeper.ErrorToError(m.ManagerRPC.RemoveBackend(backendID))
 }

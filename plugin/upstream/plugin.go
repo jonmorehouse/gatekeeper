@@ -2,7 +2,7 @@ package upstream
 
 import (
 	"github.com/jonmorehouse/gatekeeper/internal"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 // Plugin is the interface which a plugin will implement and pass to `RunPlugin`
@@ -18,18 +18,18 @@ type Plugin interface {
 	internal.BasePlugin
 
 	SetManager(Manager) error
-	UpstreamMetric(*shared.UpstreamMetric) error
+	UpstreamMetric(*gatekeeper.UpstreamMetric) error
 }
 
 // PluginClient in this case is the gatekeeper/core application. PluginClient
 // is the interface that the user of this plugin sees and is simply a wrapper
 // around *RPCClient. This is merely a wrapper which returns a clean interface
-// with error interfaces instead of *shared.Error types
+// with error interfaces instead of *gatekeeper.Error types
 type PluginClient interface {
 	internal.BasePlugin
 
 	SetManager(Manager) error
-	WriteUpstreamMetrics([]*shared.UpstreamMetric) []error
+	WriteUpstreamMetrics([]*gatekeeper.UpstreamMetric) []error
 }
 
 func NewPluginClient(rpcClient *RPCClient) PluginClient {
@@ -48,7 +48,7 @@ func (p *pluginClient) SetManager(manager Manager) error {
 	return p.pluginRPC.SetManager(manager)
 }
 
-func (p *pluginClient) WriteUpstreamMetrics(metrics []*shared.UpstreamMetric) []error {
+func (p *pluginClient) WriteUpstreamMetrics(metrics []*gatekeeper.UpstreamMetric) []error {
 	errs := p.pluginRPC.UpstreamMetric(metrics)
-	return shared.ErrorsToErrors(errs)
+	return gatekeeper.ErrorsToErrors(errs)
 }

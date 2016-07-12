@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/jonmorehouse/gatekeeper/internal"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type setManagerArgs struct {
@@ -14,14 +14,14 @@ type setManagerArgs struct {
 }
 
 type setManagerResp struct {
-	Err *shared.Error
+	Err *gatekeeper.Error
 }
 
 type upstreamMetricArgs struct {
-	Metrics []*shared.UpstreamMetric
+	Metrics []*gatekeeper.UpstreamMetric
 }
 type upstreamMetricResp struct {
-	Errs []*shared.Error
+	Errs []*gatekeeper.Error
 }
 
 // PluginRPC is a representation of the Plugin interface that is RPC safe. It
@@ -34,7 +34,7 @@ type RPCClient struct {
 	*internal.BasePluginRPCClient
 }
 
-func (c *RPCClient) SetManager(manager Manager) *shared.Error {
+func (c *RPCClient) SetManager(manager Manager) *gatekeeper.Error {
 	connID := c.broker.NextId()
 
 	// Start a ManagerRPCServer, which will take the impl, passing methods
@@ -53,7 +53,7 @@ func (c *RPCClient) SetManager(manager Manager) *shared.Error {
 	resp := &setManagerResp{}
 
 	if err := c.client.Call("Plugin.SetManager", args, resp); err != nil {
-		return shared.NewError(err)
+		return gatekeeper.NewError(err)
 	}
 
 	// before returning, we ensure that the plugin has verified
@@ -65,14 +65,14 @@ func (c *RPCClient) SetManager(manager Manager) *shared.Error {
 	return resp.Err
 }
 
-func (c *RPCClient) UpstreamMetric(metrics []*shared.UpstreamMetric) []*shared.Error {
+func (c *RPCClient) UpstreamMetric(metrics []*gatekeeper.UpstreamMetric) []*gatekeeper.Error {
 	callArgs := upstreamMetricArgs{
 		Metrics: metrics,
 	}
 	callResp := upstreamMetricResp{}
 
 	if err := c.client.Call("Plugin.UpstreamMetric", &callArgs, &callResp); err != nil {
-		return []*shared.Error{shared.NewError(err)}
+		return []*gatekeeper.Error{gatekeeper.NewError(err)}
 	}
 
 	return callResp.Errs
@@ -99,12 +99,12 @@ func (s *RPCServer) Stop(args *internal.StopArgs, resp *internal.StopResp) error
 
 func (s *RPCServer) SetManager(args *setManagerArgs, resp *setManagerResp) error {
 	if s.managerRPC != nil {
-		return shared.NewError(fmt.Errorf("Manager already started; must stop first"))
+		return gatekeeper.NewError(fmt.Errorf("Manager already started; must stop first"))
 	}
 
 	conn, err := s.broker.Dial(args.ConnID)
 	if err != nil {
-		return shared.NewError(err)
+		return gatekeeper.NewError(err)
 	}
 
 	// create an RPC connection back to the parent, connecting againt the
@@ -129,10 +129,10 @@ func (s *RPCServer) SetManager(args *setManagerArgs, resp *setManagerResp) error
 }
 
 func (s *RPCServer) UpstreamMetric(args *upstreamMetricArgs, resp *upstreamMetricResp) error {
-	errs := make([]*shared.Error, 0, len(args.Metrics))
+	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.UpstreamMetric(metric); err != nil {
-			errs = append(errs, shared.NewError(err))
+			errs = append(errs, gatekeeper.NewError(err))
 		}
 	}
 
