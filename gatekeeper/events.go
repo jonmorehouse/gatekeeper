@@ -1,4 +1,4 @@
-package shared
+package gatekeeper
 
 // Event's are generic events that are useful for birds eye views of the
 // application. Specifically, some of these metrics are redundant to others

@@ -1,4 +1,4 @@
-package shared
+package gatekeeper
 
 import "time"
 

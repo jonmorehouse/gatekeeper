@@ -1,4 +1,4 @@
-package shared
+package gatekeeper
 
 type BackendID string
 
