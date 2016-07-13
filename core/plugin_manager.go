@@ -5,6 +5,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
+	metric_plugin "github.com/jonmorehouse/gatekeeper/plugin/metric"
+	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
+	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
+	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
 type PluginManager interface {
@@ -20,10 +27,10 @@ type PluginManager interface {
 	// Grab a plugin under the readLock, under normal circumstances, we
 	// most likely wouldn't do anything substantial here. MetricWriter uses
 	// it for type switching to see which metrics to pass along
-	Grab(func(Plugin)) Plugin
+	Grab(func(Plugin))
 }
 
-func NewPluginManager(cmd string, args map[string]interface{}, pluginType PluginType, broadcaster EventBroadcaster, metricWriter MetricWriterClient) PluginManager {
+func NewPluginManager(cmd string, args map[string]interface{}, pluginType PluginType, broadcaster Broadcaster, metricWriter MetricWriterClient) PluginManager {
 	pluginName := filepath.Base(strings.SplitN(cmd, " ", 2)[0])
 
 	return &pluginManager{
@@ -31,8 +38,8 @@ func NewPluginManager(cmd string, args map[string]interface{}, pluginType Plugin
 
 		pluginType: pluginType,
 		pluginName: pluginName,
-		pluginCmd:  pluginCmd,
-		pluginArgs: pluginArgs,
+		pluginCmd:  cmd,
+		pluginArgs: args,
 
 		instance: nil,
 		workers:  0,
@@ -47,7 +54,7 @@ func NewPluginManager(cmd string, args map[string]interface{}, pluginType Plugin
 
 type pluginManager struct {
 	metricWriter MetricWriterClient
-	broadcaster  EventBroadcaster
+	broadcaster  Broadcaster
 
 	pluginType PluginType
 	pluginName string
@@ -64,11 +71,13 @@ type pluginManager struct {
 	// internal worker attributes
 	stopCh chan struct{}
 	doneCh chan struct{}
+
+	sync.RWMutex
 }
 
 func (p *pluginManager) Start() error {
 	if err := p.buildInstance(); err != nil {
-		p.Stop()
+		p.Stop(time.Duration(0))
 		return err
 	}
 
@@ -80,7 +89,7 @@ func (p *pluginManager) Start() error {
 	return nil
 }
 
-func (p *pluginManager) Stop(time.Duration) error {
+func (p *pluginManager) Stop(dur time.Duration) error {
 	errs := NewMultiError()
 	var wg sync.WaitGroup
 
@@ -91,13 +100,13 @@ func (p *pluginManager) Stop(time.Duration) error {
 	// for each worker, emit a stop message and wait for the corresponding
 	// done message to be passed back
 	_, ok := CallWithTimeout(dur, func() error {
-		wg.Add(workers)
-		for i := 0; i < workers; i++ {
+		wg.Add(int(workers))
+		for i := 0; i < int(workers); i++ {
 			p.stopCh <- struct{}{}
 		}
 
 		go func() {
-			for _, _ := range p.doneCh {
+			for _ = range p.doneCh {
 				wg.Done()
 			}
 		}()
@@ -137,7 +146,7 @@ func (p *pluginManager) Stop(time.Duration) error {
 
 func (p *pluginManager) Grab(cb func(Plugin)) {
 	p.RLock()
-	defer p.RULock()
+	defer p.RUnlock()
 
 	cb(p.instance)
 }
@@ -189,17 +198,17 @@ func (p *pluginManager) buildInstance() error {
 		case UpstreamPlugin:
 			return upstream_plugin.NewClient(p.pluginName, p.pluginCmd)
 		case RouterPlugin:
-			return router_plugin.NewClient(p.pluginName, p.pluinCmd)
+			return router_plugin.NewClient(p.pluginName, p.pluginCmd)
 		}
 		return nil, InternalPluginError
-	}
+	}()
 
 	if err != nil {
 		return err
 	}
 
 	startTS := time.Now()
-	err = instance.Configure(p.args)
+	err = instance.Configure(p.pluginArgs)
 	p.pluginMetric("Configure", time.Now().Sub(startTS), err)
 	if err != nil {
 		return err
@@ -240,7 +249,7 @@ func (p *pluginManager) heartbeat() {
 	// plugin will attempt up to p.retries times, respecting the call
 	// timeout configured in this plugin.
 	err := Retry(3, func() error {
-		return p.Call("Heartbeat", func(plugin Plugin) {
+		return p.Call("Heartbeat", func(plugin Plugin) error {
 			return plugin.Heartbeat()
 		})
 	})
@@ -253,7 +262,7 @@ func (p *pluginManager) heartbeat() {
 	p.buildInstance()
 }
 
-func (p *pluginManager) eventMetric(event gatekeeper.MetricEvent) {
+func (p *pluginManager) eventMetric(event gatekeeper.Event) {
 	p.metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Timestamp: time.Now(),
 		Event:     event,

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"sync"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
@@ -14,14 +13,15 @@ type startStop interface {
 
 type App struct {
 	// the server type adheres to the startStop interface, by convenience.
-	servers []Server
+	servers      []startStopper
+	plugins      map[PluginType][]PluginManager
+	components   []startStopper
+	metricWriter MetricWriter
+}
 
-	metricWriter    MetricWriter
-	broadcaster     EventBroadcaster
-	upstreamManager UpstreamManager
-	upstreamMatcher UpstreamMatcher
-	modifier        Modifier
-	loadBalancer    LoadBalancer
+func buildPlugins(options *Options, metricWriter MetricWriter) (map[PluginType][]PluginManager, error) {
+	return map[PluginType][]PluginManager(nil), nil
+
 }
 
 func New(options Options) (*App, error) {
@@ -29,200 +29,194 @@ func New(options Options) (*App, error) {
 		return nil, err
 	}
 
-	metricPlugins := BuildMetricPlugins()
-
-	// MetricWriter is a wrapper around a series of Event plugins which is
-	// used by various processes around teh application to emit metrics and
-	// errors to the Event plugin
-	metricPlugins := make([]PluginManager, len(options.MetricPlugins), len(options.MetricPlugins))
-	metricWriter := NewMetricWriter(metricPlugins)
-	for idx, pluginCmd := range options.MetricPlugins {
-		plugin := NewPluginManager(pluginCmd, options.MetricPluginArgs, MetricPlugin, metricWriter)
-		metricPlugins[idx] = plugin
-	}
-
+	metricWriter := NewMetricWriter(int(options.MetricBufferSize), options.MetricFlushInterval)
 	metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Timestamp: time.Now(),
 		Event:     gatekeeper.AppStartedEvent,
 	})
 
-	// the broadcaster is what glues everything together. It is responsible
-	// for dispensing events throughout the server so that plugins can
-	// update themselves in accordance with systems going online and
-	// offline.
-	broadcaster := NewUpstreamEventBroadcaster()
-
-	// each UpstreamPlugin is special because it is responsible for calling
-	// asynchronously back into the parent process. Specifically it
-	// requires an UpstreamPublisher which is cast as an
-	// upstream_plugin.Manager to be accessible for calling back into the
-	// parent program.
-	upstreamPlugins := make([]PluginManager, len(options.UpstreamPlugins), len(options.UpstreamPlugins))
-	for idx, pluginCmd := range options.UpstreamPlugins {
-		plugin := NewPluginManager(pluginCmd, options.UpstreamPluginArgs, UpstreamPlugin, metricWriter)
-		upstreamPlugins[idx] = plugin
+	plugins, err := buildPlugins(&options, metricWriter)
+	if err != nil {
+		return nil, err
 	}
 
-	// the upstreamPublisher needs to know about each pluginManager and in
-	// return, each upstreamPlugin needs to use the UpstreamPublisher
-	// because it implements the Manager interface and is what the
-	// RPCServer that is launched inside of each RPCClient uses to emit
-	// messages too
-	upstreamPublisher := NewUpstreamPublisher(upstreamPlugins, broadcaster, metricWriter)
-
-	// when the upstream plugins are configured, the publisher gets passed
-	// to them and used as the manager type. This allows the upstreamPlugin
-	// to talk back into this parent process.
-	options.UpstreamPluginArgs["_manager"] = upstreamPublisher
-
-	// build an upstreamMatcher for each server to communicate to the
-	// upstream store. This is used to find the correct upstream for each
-	// request.
-	upstreamMatcher := NewUpstreamMatcher(broadcaster)
-
-	// only one loadbalancer plugin is permitted, this is to ensure that we
-	// actually have sane load balancing! Otherwise, we run the risk of
-	// having multiple different load balancing algorithms at once.
-	loadBalancerPlugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginArgs, LoadBalancerPlugin, metricWriter)
-	loadBalancer := NewLoadBalancer(broadcaster, loadBalancerPlugin)
-
-	router := NewPluginManager(options.RouterPlugin, options.RouterPluginArgs, RouterPlugin, metricWriter)
-
-	// for each specified Modifier plugin, we create a PluginManager which
-	// manages the lifecycle of the plugin.
-	modifierPlugins := make([]PluginManager, len(options.ModifierPlugins), len(options.ModifierPlugins))
-	for idx, pluginCmd := range options.ModifierPlugins {
-		plugin := NewPluginManager(pluginCmd, options.ModifierPluginArgs, ModifierPlugin, metricWriter)
-		modifierPlugins[idx] = plugin
-	}
-
-	// modifier is a type that wraps a series of modifier plugins and is
-	// used by the Server and Proxier to actually modify requests and
-	// responses
-	modifier := NewModifier(modifierPlugins, metricWriter)
-
-	// Proxier is the naive type which _actually_ handles proxying of
-	// requests out to the backend address.
-	proxier := NewProxier(modifier, metricWriter)
-
-	// build out each server type
-	servers := make([]Server, 0, 4)
-	if options.HTTPPublicPort != 0 {
-		servers = append(servers, &ProxyServer{
-			port:            options.HTTPPublicPort,
-			protocol:        gatekeeper.HTTPPublic,
-			proxier:         proxier,
-			upstreamMatcher: upstreamMatcher,
-			loadBalancer:    loadBalancer,
-			modifier:        modifier,
-			metricWriter:    metricWriter,
-		})
-	}
-
-	if len(servers) == 0 {
+	if plugins[UpstreamPlugin] == nil {
 		return nil, ConfigurationError
 	}
 
+	// build out upstream manager and event pipeline
+	broadcaster := NewBroadcaster()
+	upstreamManager := NewUpstreamManager(broadcaster, metricWriter)
+
+	// build out router
+	var router Router
+	if plugins[RouterPlugin] == nil {
+		router = NewLocalRouter(broadcaster, metricWriter)
+	} else {
+		router = NewPluginRouter(broadcaster, plugins[RouterPlugin][0])
+	}
+
+	// build out loadbalancer
+	var loadBalancer LoadBalancer
+	if plugins[LoadBalancerPlugin] == nil {
+		loadBalancer = NewLocalLoadBalancer(broadcaster)
+	} else {
+		loadBalancer = NewPluginLoadBalancer(broadcaster, plugins[LoadBalancerPlugin][0])
+	}
+
+	// build out modifier
+	var modifier Modifier
+	if plugins[ModifierPlugin] == nil {
+		modifier = NewLocalModifier()
+	} else {
+		modifier = NewPluginModifier(plugins[ModifierPlugin])
+	}
+
+	proxier := NewProxier(modifier, metricWriter)
+
+	// configure MetricWriter
+	for _, instances := range plugins {
+		for _, plugin := range instances {
+			metricWriter.AddPlugin(plugin)
+		}
+	}
+
+	// build out servers
+	servers := make([]startStopper, 0, 0)
+	if options.HTTPPublic {
+		servers = append(servers, NewHTTPServer(
+			gatekeeper.HTTPPublic,
+			options.HTTPPublicPort,
+			router,
+			loadBalancer,
+			modifier,
+			proxier,
+			metricWriter,
+		))
+	}
+
+	if options.HTTPInternal {
+		servers = append(servers, NewHTTPServer(
+			gatekeeper.HTTPInternal,
+			options.HTTPInternalPort,
+			router,
+			loadBalancer,
+			modifier,
+			proxier,
+			metricWriter,
+		))
+	}
+
+	if options.HTTPSPublic {
+		servers = append(servers, NewHTTPSServer(
+			gatekeeper.HTTPSPublic,
+			options.HTTPSPublicPort,
+			router,
+			loadBalancer,
+			modifier,
+			proxier,
+			metricWriter,
+		))
+	}
+
+	if options.HTTPSInternal {
+		servers = append(servers, NewHTTPSServer(
+			gatekeeper.HTTPSInternal,
+			options.HTTPSInternalPort,
+			router,
+			loadBalancer,
+			modifier,
+			proxier,
+			metricWriter,
+		))
+	}
+
+	// build out servers
 	return &App{
-		metricWriter:      metricWriter,
-		broadcaster:       broadcaster,
-		upstreamMatcher:   upstreamMatcher,
-		upstreamPublisher: upstreamPublisher,
-		loadBalancer:      loadBalancer,
-		modifier:          modifier,
-		servers:           servers,
+		components: []startStopper{
+			modifier,
+			upstreamManager,
+			loadBalancer,
+			router,
+		},
+		plugins:      plugins,
+		servers:      servers,
+		metricWriter: metricWriter,
 	}, nil
 }
 
 func (a *App) Start() error {
-	// start the upstreamRequester and loadBalancer first because they
-	// receive notifications from the broadcaster immediately and we'd like
-	// to make sure that any plugin that emits upstreams/backends to the
-	// server at any time is supported. eg: if a plugin emits
-	// upstreams/backends at start time and never again.
-	syncStart := []startStop{
-		a.metricWriter,
-		a.upstreamMatcher,
-		a.loadBalancer,
-		a.upstreamPublisher,
-		a.modifier,
-	}
-	for _, job := range syncStart {
-		if job == nil {
-			return ConfigurationError
-		}
+	a.eventMetric(gatekeeper.AppStartedEvent)
 
-		if err := job.Start(); err != nil {
+	// start internal components
+	if err := CallWith(startStoppersToInterfaces(a.components), func(i interface{}) error {
+		return i.(startStopper).Start()
+	}); err != nil {
+		return err
+	}
+
+	// start all plugins
+	for _, pluginType := range []PluginType{MetricPlugin, UpstreamPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin} {
+		if err := CallWith(pluginManagersToInterfaces(a.plugins[pluginType]), func(i interface{}) error {
+			return i.(startStopper).Start()
+		}); err != nil {
 			return err
 		}
 	}
 
-	// start all servers asynchronously
-	var wg sync.WaitGroup
-	errs := NewMultiError()
-	for _, server := range a.servers {
-		wg.Add(1)
-		go func(s startStop) {
-			defer wg.Done()
-			if err := s.Start(); err != nil {
-				errs.Add(err)
-			}
-		}(server)
+	// start the metricWriter, so it can begin flushing metrics
+	if err := a.metricWriter.Start(); err != nil {
+		return err
 	}
 
-	wg.Wait()
-	return errs.ToErr()
+	// start all servers
+	if err := CallWith(startStoppersToInterfaces(a.servers), func(i interface{}) error {
+		return i.(startStopper).Start()
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (a *App) Stop(duration time.Duration) error {
+	a.eventMetric(gatekeeper.AppStoppedEvent)
 	errs := NewMultiError()
-	var wg sync.WaitGroup
 
-	// stop accepting connections on each server first, and then start the
-	// shutdown process. Its expected that the shutdown process takes
-	// longer and as such, it is fired off in a goroutine at the same time
-	// that other services throughout the app are shutdown.
-	for _, server := range a.servers {
-		if err := server.StopAccepting(); err != nil {
+	// stop servers
+	if err := CallWith(startStoppersToInterfaces(a.servers), func(i interface{}) error {
+		return i.(startStopper).Stop(duration)
+	}); err != nil {
+		errs.Add(err)
+	}
+
+	// stop all plugins, but the metric writer ...
+	for _, pluginType := range []PluginType{UpstreamPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin} {
+		if err := CallWith(pluginManagersToInterfaces(a.plugins[pluginType]), func(i interface{}) error {
+			return i.(startStopper).Stop(duration)
+		}); err != nil {
 			errs.Add(err)
-			continue
 		}
-		wg.Add(1)
-		go func(s startStop) {
-			defer wg.Done()
-			if err := s.Stop(duration); err != nil {
-				errs.Add(err)
-			}
-		}(server)
 	}
 
-	// shutdown all other plugins and internal subscribers
-	jobs := []startStop{
-		a.upstreamMatcher,
-		a.loadBalancer,
-		a.upstreamPublisher,
-		a.modifier,
-	}
-	for _, job := range jobs {
-		wg.Add(1)
-		go func(j startStop) {
-			defer wg.Done()
-			if err := j.Stop(duration); err != nil {
-				errs.Add(err)
-			}
-		}(job)
-	}
-	wg.Wait()
-
-	// emit a metric denoting that the app is stopping
-	a.metricWriter.EventMetric(&gatekeeper.EventMetric{
-		Timestamp: time.Now(),
-		Event:     gatekeeper.AppStoppedEvent,
-	})
-	// NOTE: we stop the `metricWriter` plugin last, so as to allow for
-	// other plugins to emit metrics to it in their stop methods
+	// stop the metricWriter
 	if err := a.metricWriter.Stop(duration); err != nil {
 		errs.Add(err)
 	}
+
+	// stop the metricWriter plugins
+	if err := CallWith(pluginManagersToInterfaces(a.plugins[MetricPlugin]), func(i interface{}) error {
+		return i.(startStopper).Stop(duration)
+	}); err != nil {
+		errs.Add(err)
+	}
+
 	return errs.ToErr()
+}
+
+func (a *App) eventMetric(event gatekeeper.Event) {
+	a.metricWriter.EventMetric(&gatekeeper.EventMetric{
+		Timestamp: time.Now(),
+		Event:     event,
+	})
 }

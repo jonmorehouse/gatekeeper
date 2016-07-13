@@ -10,11 +10,15 @@ type Protocol uint
 const (
 	HTTPPublic Protocol = iota + 1
 	HTTPInternal
+	HTTPSPublic
+	HTTPSInternal
 )
 
 var formattedProtocols = map[Protocol]string{
-	HTTPPublic:   "http-public",
-	HTTPInternal: "http-internal",
+	HTTPPublic:    "http-public",
+	HTTPInternal:  "http-internal",
+	HTTPSPublic:   "https-public",
+	HTTPSInternal: "https-internal",
 }
 
 func (p Protocol) String() string {

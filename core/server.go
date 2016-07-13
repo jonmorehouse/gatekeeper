@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
@@ -16,52 +17,101 @@ type Server interface {
 	Stop(time.Duration) error
 }
 
-type ProxyServer struct {
-	port     uint
-	protocol gatekeeper.Protocol
+func NewHTTPServer(protocol gatekeeper.Protocol, port uint, router RouterClient, lb LoadBalancerClient, modifier ModifierClient, proxier Proxier, metricWriter MetricWriterClient) Server {
+	mux := http.NewServeMux()
 
-	upstreamMatcher UpstreamMatcherClient
-	loadBalancer    LoadBalancerClient
-	modifier        Modifier
-	metricWriter    MetricWriter
-	proxier         Proxier
+	instance := &server{
+		protocol: protocol,
+		port:     port,
 
-	stopAccepting     bool
-	stopCh            chan struct{}
-	stoppedCh         chan struct{}
-	errCh             chan error
-	requestStartedCh  chan struct{}
-	requestFinishedCh chan struct{}
+		router:       router,
+		loadBalancer: lb,
+		modifier:     modifier,
+		metricWriter: metricWriter,
+		proxier:      proxier,
 
-	httpServer *graceful.Server
+		stopCh: make(chan struct{}, 1),
+		errCh:  make(chan error, 1),
+
+		httpServer: &graceful.Server{
+			Server: &http.Server{
+				Addr:    fmt.Sprintf(":%d", port),
+				Handler: mux,
+			},
+			NoSignalHandling: true,
+		},
+	}
+	mux.HandleFunc("/", instance.httpHandler)
+	return instance
 }
 
-func (s *ProxyServer) Start() error {
-	// start the metric worker for tracking current requests
-	s.requestStartedCh = make(chan struct{}, 1000)
-	s.requestFinishedCh = make(chan struct{}, 1000)
-	s.stopCh = make(chan struct{}, 1)
-	s.stoppedCh = make(chan struct{}, 1)
-	go s.metricWorker()
+func NewHTTPSServer(protocol gatekeeper.Protocol, port uint, router RouterClient, lb LoadBalancerClient, modifier ModifierClient, proxier Proxier, metricWriter MetricWriterClient) Server {
+	mux := http.NewServeMux()
 
+	instance := &server{
+		protocol: protocol,
+		port:     port,
+
+		router:       router,
+		loadBalancer: lb,
+		modifier:     modifier,
+		metricWriter: metricWriter,
+		proxier:      proxier,
+
+		stopCh: make(chan struct{}, 1),
+		errCh:  make(chan error, 1),
+
+		httpServer: &graceful.Server{
+			Server: &http.Server{
+				Addr:    fmt.Sprintf(":%d", port),
+				Handler: mux,
+			},
+			NoSignalHandling: true,
+		},
+	}
+
+	mux.HandleFunc("/", instance.httpHandler)
+	return instance
+}
+
+type server struct {
+	protocol gatekeeper.Protocol
+	port     uint
+
+	router       RouterClient
+	loadBalancer LoadBalancerClient
+	modifier     ModifierClient
+	metricWriter MetricWriterClient
+	proxier      Proxier
+
+	stopAccepting bool
+	stopCh        chan struct{}
+	errCh         chan error
+
+	httpServer *graceful.Server
+
+	sync.Mutex
+}
+
+func (s *server) Start() error {
+	// start the metric worker for tracking current requests
 	s.eventMetric(gatekeeper.ServerStartedEvent)
 	return s.startHTTP()
 }
 
-func (s *ProxyServer) StopAccepting() error {
+func (s *server) StopAccepting() error {
 	s.stopAccepting = true
 	return nil
 }
 
-func (s *ProxyServer) Stop(duration time.Duration) error {
+func (s *server) Stop(duration time.Duration) error {
 	s.eventMetric(gatekeeper.ServerStoppedEvent)
 	s.httpServer.Stop(duration)
 	s.stopCh <- struct{}{}
-	<-s.stoppedCh
 	return <-s.errCh
 }
 
-func (s *ProxyServer) startHTTP() error {
+func (s *server) startHTTP() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.httpHandler)
 
@@ -99,9 +149,8 @@ finished:
 	return nil
 }
 
-func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
+func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	start := time.Now()
-	s.requestStartedCh <- struct{}{}
 	req := gatekeeper.NewRequest(rawReq, s.protocol)
 
 	metric := &gatekeeper.RequestMetric{
@@ -114,7 +163,6 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 	// finish the request metric, and emit it to the MetricWriter at the
 	// end of this function, after the response has been written
 	defer func(metric *gatekeeper.RequestMetric) {
-		s.requestFinishedCh <- struct{}{}
 		metric.Timestamp = time.Now()
 		metric.RequestEndTS = time.Now()
 		metric.Latency = time.Now().Sub(start)
@@ -136,7 +184,7 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 	// build a *gatekeeper.Request for this rawReq; a wrapper with additional
 	// meta information around an *http.Request object
 	matchStartTS := time.Now()
-	upstream, matchType, err := s.upstreamMatcher.Match(req)
+	upstream, req, err := s.router.RouteRequest(req)
 	if err != nil {
 		resp := gatekeeper.NewErrorResponse(400, err)
 		metric.Response = resp
@@ -145,14 +193,11 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 		return
 	}
 	metric.UpstreamMatcherLatency = time.Now().Sub(matchStartTS)
-
 	metric.Upstream = upstream
-	req.Upstream = upstream
-	req.UpstreamMatchType = matchType
 
 	// fetch a backend from the loadbalancer to proxy this request too
 	loadBalancerStartTS := time.Now()
-	backend, err := s.loadBalancer.GetBackend(upstream)
+	backend, err := s.loadBalancer.GetBackend(upstream.ID)
 	if err != nil {
 		resp := gatekeeper.NewErrorResponse(500, err)
 		metric.Response = resp
@@ -205,10 +250,10 @@ func (s *ProxyServer) httpHandler(rw http.ResponseWriter, rawReq *http.Request) 
 }
 
 // write an error response, calling the ErrorResponse handler in the modifier plugin
-func (s *ProxyServer) writeError(rw http.ResponseWriter, err error, request *gatekeeper.Request, response *gatekeeper.Response) {
+func (s *server) writeError(rw http.ResponseWriter, err error, request *gatekeeper.Request, response *gatekeeper.Response) {
 	response, err = s.modifier.ModifyErrorResponse(err, request, response)
 	if err != nil {
-		response.Body = []byte(ModifierPluginError.String())
+		response.Body = []byte(ModifierPluginError.Error())
 		response.StatusCode = 500
 	}
 
@@ -217,7 +262,7 @@ func (s *ProxyServer) writeError(rw http.ResponseWriter, err error, request *gat
 }
 
 // write a *gatekeeper.Response to an http.ResponseWriter
-func (s *ProxyServer) writeResponse(rw http.ResponseWriter, response *gatekeeper.Response) {
+func (s *server) writeResponse(rw http.ResponseWriter, response *gatekeeper.Response) {
 	rw.WriteHeader(response.StatusCode)
 
 	for header, values := range response.Header {
@@ -236,34 +281,9 @@ func (s *ProxyServer) writeResponse(rw http.ResponseWriter, response *gatekeeper
 	}
 }
 
-func (s *ProxyServer) eventMetric(event gatekeeper.MetricEvent) {
+func (s *server) eventMetric(event gatekeeper.Event) {
 	s.metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Event:     event,
 		Timestamp: time.Now(),
 	})
-}
-
-func (s *ProxyServer) metricWorker() {
-	defer func() {
-		s.stoppedCh <- struct{}{}
-	}()
-
-	outstanding := 0
-
-	cb := func() {}
-
-	tickCh := time.NewTicker(time.Millisecond * 100).C
-	for {
-		select {
-		case <-s.requestStartedCh:
-			outstanding += 1
-		case <-s.requestFinishedCh:
-			outstanding -= 1
-		case <-tickCh:
-			cb()
-		case <-s.stopCh:
-			cb()
-			return
-		}
-	}
 }

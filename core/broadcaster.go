@@ -15,9 +15,13 @@ type UpstreamEvent struct {
 	Event gatekeeper.Event
 
 	Upstream   *gatekeeper.Upstream
-	UpstreamID gatekeeper.UpsteamID
+	UpstreamID gatekeeper.UpstreamID
 	Backend    *gatekeeper.Backend
 	BackendID  gatekeeper.BackendID
+}
+
+func (u *UpstreamEvent) Type() gatekeeper.Event {
+	return u.Event
 }
 
 func (u *UpstreamEvent) UpstreamEvent() (*UpstreamEvent, error) {
@@ -61,9 +65,10 @@ type broadcaster struct {
 }
 
 func (b *broadcaster) AddListener(ch EventCh, events []gatekeeper.Event) ListenerID {
-	listenerID := ListenerID(NewUUID())
+	listenerID := ListenerID(gatekeeper.GetUUID())
+
 	for _, event := range events {
-		listeners, found := b.eventListeners[event]
+		_, found := b.eventListeners[event]
 		if !found {
 			b.eventListeners[event] = make(map[ListenerID]EventCh, 1)
 		}
@@ -71,12 +76,12 @@ func (b *broadcaster) AddListener(ch EventCh, events []gatekeeper.Event) Listene
 		b.eventListeners[event][listenerID] = ch
 	}
 
-	return listenerID, nil
+	return listenerID
 }
 
 func (b *broadcaster) RemoveListener(id ListenerID) {
-	for event, listeners := range b.eventListeners {
-		delete(listeners, id)
+	for event, _ := range b.eventListeners {
+		delete(b.eventListeners[event], id)
 	}
 }
 

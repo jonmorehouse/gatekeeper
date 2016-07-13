@@ -10,13 +10,7 @@ var NilBackendID BackendID = ""
 var NilBackend Backend = Backend{}
 
 func NewBackendID() BackendID {
-	var uuid string
-	RetryAndPanic(func() error {
-		var err error
-		uuid, err = NewUUID()
-		return err
-	}, 3)
-	return BackendID(uuid)
+	return BackendID(GetUUID())
 }
 
 type Backend struct {

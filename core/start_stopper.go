@@ -2,7 +2,7 @@ package core
 
 import "time"
 
-type StartStopper interface {
+type startStopper interface {
 	Start() error
 	Stop(time.Duration) error
 }

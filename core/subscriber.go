@@ -1,4 +1,4 @@
-package subscriber
+package core
 
 import (
 	"sync"
@@ -8,22 +8,22 @@ import (
 )
 
 type Subscriber interface {
-	StartStopper
+	startStopper
 
-	AddUpstreamEventHook(gatekeeper.Event, func(*UpstreamEvent))
+	AddUpstreamEventHook(gatekeeper.Event, func(*UpstreamEvent)) error
 }
 
 func NewSubscriber(broadcaster Broadcaster) Subscriber {
 	return &subscriber{
 		hooks:       make(map[gatekeeper.Event][]func(*UpstreamEvent)),
 		eventCh:     make(EventCh),
-		listenerIDs: make(map[gatekeeper.Event]ListenerID),
 		broadcaster: broadcaster,
 	}
 }
 
 type subscriber struct {
-	hooks map[gatekeeper.Event][]func(*UpstreamEvent)
+	hooks       map[gatekeeper.Event][]func(*UpstreamEvent)
+	broadcaster Broadcaster
 
 	eventCh EventCh
 	doneCh  chan error
@@ -34,6 +34,7 @@ type subscriber struct {
 
 func (s *subscriber) Start() error {
 	go s.worker()
+	return nil
 }
 
 func (s *subscriber) Stop(time.Duration) error {
@@ -52,8 +53,8 @@ func (s *subscriber) AddUpstreamEventHook(event gatekeeper.Event, hook func(*Ups
 		return InvalidEventErr
 	}
 
-	r.Lock()
-	defer r.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	s.hooks[event] = append(s.hooks[event], hook)
 	return nil
 }
@@ -64,7 +65,7 @@ func (s *subscriber) worker() {
 
 	// TODO update this code when listeners for non-upstream events are added
 	ch := make(EventCh, 5)
-	listenerID := s.broadcaster.AddListener(ch, []gatekeeper.EventType{
+	listenerID := s.broadcaster.AddListener(ch, []gatekeeper.Event{
 		gatekeeper.UpstreamAddedEvent,
 		gatekeeper.UpstreamRemovedEvent,
 		gatekeeper.BackendAddedEvent,
@@ -99,19 +100,18 @@ func (s *subscriber) worker() {
 		}
 	}
 
+	var stopped bool
 	for {
 		select {
-		case <-stopCh:
+		case <-s.stopCh:
 			break
-		case event, _ := <-eventCh:
+		case event, _ := <-s.eventCh:
 			handler(event)
 		}
 
 		if stopped {
-			if err := s.broadcaster.RemoveListener(listenerID); err != nil {
-				errs.Add(err)
-			}
-			close(eventCh)
+			s.broadcaster.RemoveListener(listenerID)
+			close(s.eventCh)
 		}
 	}
 

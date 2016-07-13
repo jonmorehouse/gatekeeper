@@ -13,24 +13,45 @@ type ModifierClient interface {
 }
 
 type Modifier interface {
-	StartStopper
+	startStopper
 	ModifierClient
 }
 
-func NewModifier(pluginManagers []PluginManager) {
-	return &modifier{
+func NewLocalModifier() Modifier {
+	return &localModifier{}
+}
+
+type localModifier struct{}
+
+func (*localModifier) Start() error             { return nil }
+func (*localModifier) Stop(time.Duration) error { return nil }
+
+func (*localModifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
+	return req, nil
+}
+
+func (*localModifier) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+	return resp, nil
+}
+
+func (*localModifier) ModifyErrorResponse(err error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+	return resp, nil
+}
+
+func NewPluginModifier(pluginManagers []PluginManager) Modifier {
+	return &pluginModifier{
 		pluginManagers: pluginManagers,
 	}
 }
 
-type modifier struct {
+type pluginModifier struct {
 	pluginManagers []PluginManager
 }
 
-func (r *modifier) Start(time.Duration) error { return nil }
-func (r *modifier) Stop(time.Duration) error  { return nil }
+func (r *pluginModifier) Start() error             { return nil }
+func (r *pluginModifier) Stop(time.Duration) error { return nil }
 
-func (r *modifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
+func (r *pluginModifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
 	var modifiedReq *gatekeeper.Request
 	var err error
 
@@ -42,7 +63,7 @@ func (r *modifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, 
 				return nil
 			}
 
-			modifiedReq, err = modifierPlugin(req)
+			modifiedReq, err = modifierPlugin.ModifyRequest(req)
 			return err
 		})
 
@@ -54,7 +75,7 @@ func (r *modifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, 
 	return modifiedReq, err
 }
 
-func (r *modifier) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+func (r *pluginModifier) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
 	var modifiedResp *gatekeeper.Response
 	var err error
 
@@ -78,7 +99,7 @@ func (r *modifier) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Resp
 	return modifiedResp, err
 }
 
-func (r *modifier) ModifyErrorResponse(err error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+func (r *pluginModifier) ModifyErrorResponse(reqErr error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
 	var modifiedResp *gatekeeper.Response
 	var err error
 
@@ -90,7 +111,7 @@ func (r *modifier) ModifyErrorResponse(err error, req *gatekeeper.Request, resp 
 				return nil
 			}
 
-			modifiedResp, err = modifierPlugin.ModifyErrorResponse(err, req, resp)
+			modifiedResp, err = modifierPlugin.ModifyErrorResponse(reqErr, req, resp)
 			return err
 		})
 

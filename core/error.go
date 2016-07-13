@@ -37,27 +37,32 @@ var LoadBalancerPluginError = errors.New("load balancer plugin error")
 var ModifierPluginError = errors.New("modifier plugin error")
 var ProxyTimeoutError = errors.New("proxy timeout error")
 
+var InvalidEventErr = errors.New("invalid event error")
+var DuplicateUpstreamErr = errors.New("duplicate upstream error")
+var DuplicateBackendErr = errors.New("duplicate backend error")
+var BackendAddressErr = errors.New("invalid backend error")
+
 // goroutine safe error implementing type for managing multiple errors
 type MultiError struct {
-	errors []error
+	errs []error
 	sync.RWMutex
 }
 
 func NewMultiError() *MultiError {
 	return &MultiError{
-		errors: make([]error, 0, 0),
+		errs: make([]error, 0, 0),
 	}
 }
 
 func (m *MultiError) Add(err error) {
 	m.Lock()
 	defer m.Unlock()
-	m.errors = append(m.errors, err)
+	m.errs = append(m.errs, err)
 }
 
 func (m *MultiError) Error() string {
 	var buffer bytes.Buffer
-	for _, e := range m.errors {
+	for _, e := range m.errs {
 		buffer.WriteString(e.Error())
 		buffer.WriteString("\n")
 	}
@@ -66,7 +71,7 @@ func (m *MultiError) Error() string {
 }
 
 func (m *MultiError) ToErr() error {
-	if len(m.errors) == 0 {
+	if len(m.errs) == 0 {
 		return nil
 	}
 

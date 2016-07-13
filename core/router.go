@@ -3,10 +3,9 @@ package core
 import (
 	"log"
 	"sync"
-	"time"
 
-	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
 )
 
 type RouterClient interface {
@@ -14,7 +13,7 @@ type RouterClient interface {
 }
 
 type Router interface {
-	StartStopper
+	startStopper
 
 	RouterClient
 }
@@ -27,6 +26,8 @@ func NewLocalRouter(broadcaster Broadcaster, metricWriter MetricWriter) Router {
 		upstreams:     make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
 		prefixCache:   make(map[string]*gatekeeper.Upstream),
 		hostnameCache: make(map[string]*gatekeeper.Upstream),
+
+		Subscriber: NewSubscriber(broadcaster),
 	}
 }
 
@@ -40,16 +41,14 @@ type localRouter struct {
 	upstreams     map[gatekeeper.UpstreamID]*gatekeeper.Upstream
 	prefixCache   map[string]*gatekeeper.Upstream
 	hostnameCache map[string]*gatekeeper.Upstream
+
+	Subscriber
 }
 
 func (l *localRouter) Start() error {
-	go worker()
-	l.listenerID = l.broadcaster.AddListener(l.eventCh, []gatekeeper.Event{gatekeeper.UpstreamAddedEvent, gatekeeper.UpstreamRemovedEvent})
-}
-
-func (l *localRouter) Stop(dur time.Duration) error {
-	l.broadcaster.RemoveListener(l.listenerID)
-	close(l.eventCh)
+	l.Subscriber.AddUpstreamEventHook(gatekeeper.UpstreamAddedEvent, l.addUpstreamHook)
+	l.Subscriber.AddUpstreamEventHook(gatekeeper.UpstreamRemovedEvent, l.removeUpstreamHook)
+	return l.Subscriber.Start()
 }
 
 func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
@@ -62,15 +61,15 @@ func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstrea
 		return upstream, req, nil
 	}
 
-	upstream, hit = l.hostnameCache[req.Hostname]
+	upstream, hit = l.hostnameCache[req.Host]
 	if hit {
 		return upstream, req, nil
 	}
 
 	// check the upstream store for any and all matches
 	for _, upstream := range l.upstreams {
-		if InStrList(req.Hostname, upstream.Hostnames) {
-			l.hostnameCache[req.Hostname] = upstream
+		if InStrList(req.Host, upstream.Hostnames) {
+			l.hostnameCache[req.Host] = upstream
 			return upstream, req, nil
 		}
 
@@ -84,52 +83,30 @@ func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstrea
 	return nil, req, RouteNotFoundError
 }
 
-func (l *localRouter) worker() {
-	// for each event, grab the event and update the local cache
-	for _, event := range l.eventCh {
-		upstreamEvent, err := event.AsUpstreamEvent()
-		if !err {
-			log.Println(err)
-			continue
-		}
-		if event.Type() != gatekeeper.UpstreamAddedEvent && event.Type() != gatekeeper.UpstreamRemovedEvent {
-			log.Println(UnsubscribedEventError)
-			continue
-		}
+func (l *localRouter) addUpstreamHook(event *UpstreamEvent) {
 
-		l.Lock()
-		if event.Type() == gatekeeper.UpstreamAddedEvent {
-			l.upstreams[upstreamEvent.UpstreamID] = upstreamEvent.Upstream
-		} else {
-			// clear all state
-			delete(l.upstreams, upstreamEvent.UpstreamID)
-			for _, prefix := range upstreamEvent.Upstream.Prefixes {
-				delete(l.prefixCache, prefix)
-			}
-			for _, hostname := range upstreamEvent.Upstream.Hostnames {
-				delete(l.hostnameCache, hostname)
-			}
-		}
-		l.Unlock()
-	}
+}
+
+func (l *localRouter) removeUpstreamHook(event *UpstreamEvent) {
+
 }
 
 func NewPluginRouter(broadcaster Broadcaster, pluginManager PluginManager) Router {
 	return &pluginRouter{
-		subscriber:    NewSubscriber(broadcaster),
+		Subscriber:    NewSubscriber(broadcaster),
 		pluginManager: pluginManager,
 	}
 }
 
 type pluginRouter struct {
-	subscriber    Subscriber
 	pluginManager PluginManager
+	Subscriber
 }
 
 func (p *pluginRouter) Start() error {
-	p.subscriber.AddUpstreamEventHook(gatekeeper.UpstreamAddedEvent, p.addUpstreamHook)
-	p.subscriber.AddUpstreamEventHook(gatekeeper.UpstreamRemovedEvent, p.removeUpstreamHook)
-	return p.subscriber.Start()
+	p.Subscriber.AddUpstreamEventHook(gatekeeper.UpstreamAddedEvent, p.addUpstreamHook)
+	p.Subscriber.AddUpstreamEventHook(gatekeeper.UpstreamRemovedEvent, p.removeUpstreamHook)
+	return p.Subscriber.Start()
 }
 
 func (p *pluginRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
@@ -139,7 +116,7 @@ func (p *pluginRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstre
 	callErr := p.pluginManager.Call("RouteRequest", func(plugin Plugin) error {
 		routerPlugin, ok := plugin.(router_plugin.PluginClient)
 		if !ok {
-			gatekeeper.ProgrammingError(InternalPluginError)
+			gatekeeper.ProgrammingError(InternalPluginError.Error())
 			return nil
 		}
 
@@ -154,11 +131,11 @@ func (p *pluginRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstre
 	return upstream, req, err
 }
 
-func (p *pluginRouter) addUpstreamHook(event *gatekeeper.UpstreamEvent) {
+func (p *pluginRouter) addUpstreamHook(event *UpstreamEvent) {
 	callErr := p.pluginManager.Call("AddUpstream", func(plugin Plugin) error {
 		routerPlugin, ok := plugin.(router_plugin.PluginClient)
 		if !ok {
-			gatekeeper.ProgrammingError(InternalPluginError)
+			gatekeeper.ProgrammingError(InternalPluginError.Error())
 			return nil
 		}
 
@@ -170,11 +147,11 @@ func (p *pluginRouter) addUpstreamHook(event *gatekeeper.UpstreamEvent) {
 	}
 }
 
-func (p *pluginRouter) removeUpstreamHook(event *gatekeeper.UpstreamEvent) {
+func (p *pluginRouter) removeUpstreamHook(event *UpstreamEvent) {
 	callErr := p.pluginManager.Call("RemoveUpstream", func(plugin Plugin) error {
 		routerPlugin, ok := plugin.(router_plugin.PluginClient)
 		if !ok {
-			gatekeeper.ProgrammingError(InternalPluginError)
+			gatekeeper.ProgrammingError(InternalPluginError.Error())
 			return nil
 		}
 

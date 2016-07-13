@@ -3,33 +3,43 @@ package core
 import (
 	"log"
 	"sync"
+
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
 )
 
-type LoadBalancer interface {
-	StartStopper
-
+type LoadBalancerClient interface {
 	GetBackend(gatekeeper.UpstreamID) (*gatekeeper.Backend, error)
+}
+
+type LoadBalancer interface {
+	startStopper
+
+	LoadBalancerClient
 }
 
 func NewLocalLoadBalancer(broadcaster Broadcaster) LoadBalancer {
 	return &localLoadBalancer{
-		subscriber: NewSubscriber(broadcaster),
+		backends:   make(map[gatekeeper.UpstreamID]map[gatekeeper.BackendID]*gatekeeper.Backend),
+		Subscriber: NewSubscriber(broadcaster),
 	}
 }
 
 type localLoadBalancer struct {
 	backends map[gatekeeper.UpstreamID]map[gatekeeper.BackendID]*gatekeeper.Backend
 
+	Subscriber
+
 	sync.RWMutex
 }
 
 func (l *localLoadBalancer) Start() error {
-	l.subscriber.AddUpstreamEventhook(gatekeeper.BackendAddedEvent, l.addBackendHook)
-	l.subscriber.AddUpstreamEventhook(gatekeeper.BackendRemovedEvent, l.removeBackendHook)
-	return l.subscriber.Start()
+	l.AddUpstreamEventHook(gatekeeper.BackendAddedEvent, l.addBackendHook)
+	l.AddUpstreamEventHook(gatekeeper.BackendRemovedEvent, l.removeBackendHook)
+	return l.Subscriber.Start()
 }
 
-func (l *localLoadBalancer) GetBackend(upstreamID *gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {
+func (l *localLoadBalancer) GetBackend(upstreamID gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {
 	l.RLock()
 	defer l.RUnlock()
 
@@ -73,8 +83,8 @@ func (l *localLoadBalancer) removeBackendHook(event *UpstreamEvent) {
 
 func NewPluginLoadBalancer(broadcaster Broadcaster, pluginManager PluginManager) LoadBalancer {
 	return &pluginLoadBalancer{
-		subscriber:    NewSubscriber(broadcaster),
 		pluginManager: pluginManager,
+		Subscriber:    NewSubscriber(broadcaster),
 	}
 }
 
@@ -83,14 +93,14 @@ func NewPluginLoadBalancer(broadcaster Broadcaster, pluginManager PluginManager)
 // Specifically, it uses the subscriber to configure hooks to call into the
 // plugin when a new event is emitted internally
 type pluginLoadBalancer struct {
-	subscriber    Subscriber
 	pluginManager PluginManager
+	Subscriber
 }
 
 func (l *pluginLoadBalancer) Start() error {
-	l.subscriber.AddHook(gatekeeper.BackendAddedEvent, l.backendAddedHook)
-	l.subscriber.AddHook(gatekeeper.BackendRemovedEvent, l.backendRemovedHook)
-	return l.subscriber.Start()
+	l.AddUpstreamEventHook(gatekeeper.BackendAddedEvent, l.backendAddedHook)
+	l.AddUpstreamEventHook(gatekeeper.BackendRemovedEvent, l.backendRemovedHook)
+	return l.Subscriber.Start()
 }
 
 func (l *pluginLoadBalancer) GetBackend(upstreamID gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {
@@ -111,7 +121,7 @@ func (l *pluginLoadBalancer) GetBackend(upstreamID gatekeeper.UpstreamID) (*gate
 	return backend, err
 }
 
-func (l *pluginLoadBalancer) backendAddedEvent(event *UpstreamEvent) {
+func (l *pluginLoadBalancer) backendAddedHook(event *UpstreamEvent) {
 	l.pluginManager.Call("AddBackend", func(plugin Plugin) error {
 		lbPlugin, ok := plugin.(loadbalancer_plugin.PluginClient)
 		if !ok {

@@ -12,13 +12,7 @@ var NilUpstreamID UpstreamID = ""
 var NilUpstream Upstream = Upstream{}
 
 func NewUpstreamID() UpstreamID {
-	var uuid string
-	RetryAndPanic(func() error {
-		var err error
-		uuid, err = NewUUID()
-		return err
-	}, 3)
-	return UpstreamID(uuid)
+	return UpstreamID(GetUUID())
 }
 
 type UpstreamMatchType uint

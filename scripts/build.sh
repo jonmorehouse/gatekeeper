@@ -27,8 +27,8 @@ fi
 # 
 # Build packages
 #
-echo "building shared package ..."
-cd "$DIR/shared"
+echo "building gatekeeper package ..."
+cd "$DIR/gatekeeper"
 go build .
 
 echo "building internal package ..."
@@ -55,8 +55,8 @@ echo "building plugin/upstream package ..."
 cd "$DIR/plugin/upstream"
 go build .
 
-echo "building gatekeeper core package ..."
-cd "$DIR/gatekeeper"
+echo "building core package ..."
+cd "$DIR/core"
 go build .
 
 

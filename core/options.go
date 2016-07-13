@@ -39,8 +39,10 @@ type Options struct {
 	ModifierPlugins    []string
 	ModifierPluginArgs map[string]interface{}
 
-	MetricPlugins    []string
-	MetricPluginArgs map[string]interface{}
+	MetricPlugins       []string
+	MetricPluginArgs    map[string]interface{}
+	MetricBufferSize    uint
+	MetricFlushInterval time.Duration
 
 	// server configurations
 	HTTPPublic     bool

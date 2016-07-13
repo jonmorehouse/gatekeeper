@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/core"
 )
 
 type stringValue struct {
@@ -32,7 +32,7 @@ func parseExtraFlags(args []string) []*flag.Flag {
 	for _, arg := range args {
 		if !strings.HasPrefix(arg, "-") {
 			if current == nil {
-				log.Fatal(gatekeeper.InvalidPluginArgs)
+				log.Fatal(core.InvalidPluginArgs)
 			}
 			current.Value.Set(arg)
 			continue
@@ -112,22 +112,24 @@ func main() {
 
 	pluginTimeout, err := time.ParseDuration(*pluginTimeoutStr)
 	if err != nil {
-		log.Fatal(gatekeeper.InvalidPluginTimeoutError)
+		log.Fatal(core.InvalidPluginTimeoutError)
 		return
 	}
 
 	proxyTimeout, err := time.ParseDuration(*proxyTimeoutStr)
 	if err != nil {
-		log.Fatal(gatekeeper.InvalidProxyTimeoutError)
+		log.Fatal(core.InvalidProxyTimeoutError)
 		return
 	}
 
-	options := gatekeeper.Options{
+	options := core.Options{
 		UpstreamPlugins:    strings.Split(*upstreamPlugins, ","),
 		UpstreamPluginArgs: prefixedArgs(extraFlags, "-upstream-"),
 
-		MetricPlugins:    strings.Split(*metricPlugins, ","),
-		MetricPluginArgs: prefixedArgs(extraFlags, "-metric-"),
+		MetricPlugins:       strings.Split(*metricPlugins, ","),
+		MetricPluginArgs:    prefixedArgs(extraFlags, "-metric-"),
+		MetricBufferSize:    10000,
+		MetricFlushInterval: time.Millisecond * 100,
 
 		ModifierPlugins:    strings.Split(*modifierPlugins, ","),
 		ModifierPluginArgs: prefixedArgs(extraFlags, "-modifier-"),
@@ -157,7 +159,7 @@ func main() {
 
 	// build the server application which manages multiple servers
 	// listening on multiple ports.
-	app, err := gatekeeper.New(options)
+	app, err := core.New(options)
 	if err != nil {
 		log.Fatal(err)
 	}

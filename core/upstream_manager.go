@@ -5,18 +5,17 @@ import (
 	"sync"
 	"time"
 
-	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
 type UpstreamManager interface {
-	StartStopper
+	startStopper
 	upstream_plugin.Manager
 }
 
-func NewUpstreamManager(broadcaster EventBroadcaster, plugins []PluginManager, metricWriter MetricWriterClient) UpstreamManager {
+func NewUpstreamManager(broadcaster Broadcaster, metricWriter MetricWriterClient) UpstreamManager {
 	return &upstreamManager{
-		plugins:     plugins,
 		broadcaster: broadcaster,
 
 		upstreams: make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
@@ -25,14 +24,19 @@ func NewUpstreamManager(broadcaster EventBroadcaster, plugins []PluginManager, m
 }
 
 type upstreamManager struct {
-	plugins     []PluginManager
-	broadcaster EventBroadcaster
+	broadcaster Broadcaster
 
-	upstreams map[gatekeeper.UpstreamID]*gatekeeper.Upstream
-	backends  map[gatekeeper.Backend]*gatekeeper.Backend
+	upstreams        map[gatekeeper.UpstreamID]*gatekeeper.Upstream
+	backends         map[gatekeeper.BackendID]*gatekeeper.Backend
+	backendUpstreams map[gatekeeper.BackendID]gatekeeper.UpstreamID
+
+	metricWriter MetricWriterClient
 
 	sync.Mutex
 }
+
+func (m *upstreamManager) Start() error             { return nil }
+func (m *upstreamManager) Stop(time.Duration) error { return nil }
 
 func (m *upstreamManager) AddUpstream(upstream *gatekeeper.Upstream) error {
 	m.Lock()
@@ -40,7 +44,7 @@ func (m *upstreamManager) AddUpstream(upstream *gatekeeper.Upstream) error {
 
 	existing, ok := m.upstreams[upstream.ID]
 	if ok && existing.Name != upstream.Name {
-		return DuplicateUpstreamIDError
+		return DuplicateUpstreamErr
 	}
 
 	m.upstreams[upstream.ID] = upstream
@@ -49,7 +53,7 @@ func (m *upstreamManager) AddUpstream(upstream *gatekeeper.Upstream) error {
 	m.eventMetric(gatekeeper.UpstreamAddedEvent)
 	m.upstreamMetric(gatekeeper.UpstreamAddedEvent, upstream, nil)
 	m.broadcaster.Publish(&UpstreamEvent{
-		EventType:  UpstreamAdded,
+		Event:      gatekeeper.UpstreamAddedEvent,
 		Upstream:   upstream,
 		UpstreamID: upstream.ID,
 	})
@@ -65,19 +69,19 @@ func (m *upstreamManager) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error
 		return UpstreamNotFoundError
 	}
 
-	delete(p.upstreams, upstreamID)
+	delete(m.upstreams, upstreamID)
 
 	m.eventMetric(gatekeeper.UpstreamRemovedEvent)
 	m.upstreamMetric(gatekeeper.UpstreamRemovedEvent, upstream, nil)
 	m.broadcaster.Publish(&UpstreamEvent{
-		EventType:  UpstreamRemoved,
+		Event:      gatekeeper.UpstreamRemovedEvent,
 		Upstream:   upstream,
 		UpstreamID: upstreamID,
 	})
 	return nil
 }
 
-func (p *upstreamManager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
+func (m *upstreamManager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -88,12 +92,12 @@ func (p *upstreamManager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *
 	}
 
 	existing, ok := m.backends[backend.ID]
-	if existing && backend.Address != existing.Address {
-		return DuplicateBackendIDError
+	if ok && (backend.Address != existing.Address) {
+		return DuplicateBackendErr
 	}
 
 	if _, err := url.Parse(backend.Address); err != nil {
-		return BackendAddressError
+		return BackendAddressErr
 	}
 
 	m.backends[backend.ID] = backend
@@ -102,7 +106,7 @@ func (p *upstreamManager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *
 	m.eventMetric(gatekeeper.BackendAddedEvent)
 	m.upstreamMetric(gatekeeper.BackendAddedEvent, upstream, backend)
 	m.broadcaster.Publish(&UpstreamEvent{
-		EventType:  BackendAdded,
+		Event:      gatekeeper.BackendAddedEvent,
 		Upstream:   upstream,
 		UpstreamID: upstreamID,
 		Backend:    backend,
@@ -112,7 +116,7 @@ func (p *upstreamManager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *
 	return nil
 }
 
-func (p *upstreamManager) RemoveBackend(backendID gatekeeper.BackendID) error {
+func (m *upstreamManager) RemoveBackend(backendID gatekeeper.BackendID) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -121,7 +125,7 @@ func (p *upstreamManager) RemoveBackend(backendID gatekeeper.BackendID) error {
 		return BackendNotFoundError
 	}
 
-	upstream, ok := m.backendUpstreams[backendID]
+	upstream, ok := m.upstreams[m.backendUpstreams[backendID]]
 	if !ok {
 		return OrphanedBackendError
 	}
@@ -131,7 +135,7 @@ func (p *upstreamManager) RemoveBackend(backendID gatekeeper.BackendID) error {
 	m.eventMetric(gatekeeper.BackendRemovedEvent)
 	m.upstreamMetric(gatekeeper.BackendRemovedEvent, upstream, backend)
 	m.broadcaster.Publish(&UpstreamEvent{
-		EventType:  BackendRemoved,
+		Event:      gatekeeper.BackendRemovedEvent,
 		Upstream:   upstream,
 		UpstreamID: upstream.ID,
 		Backend:    backend,
@@ -141,7 +145,7 @@ func (p *upstreamManager) RemoveBackend(backendID gatekeeper.BackendID) error {
 	return nil
 }
 
-func (p *upstreamManager) eventMetric(event gatekeeper.MetricEvent) {
+func (p *upstreamManager) eventMetric(event gatekeeper.Event) {
 	p.metricWriter.EventMetric(&gatekeeper.EventMetric{
 		Timestamp: time.Now(),
 		Event:     event,
@@ -151,7 +155,7 @@ func (p *upstreamManager) eventMetric(event gatekeeper.MetricEvent) {
 	})
 }
 
-func (p *upstreamManager) upstreamMetric(event gatekeeper.MetricEvent, upstream *gatekeeper.Upstream, backend *gatekeeper.Backend) {
+func (p *upstreamManager) upstreamMetric(event gatekeeper.Event, upstream *gatekeeper.Upstream, backend *gatekeeper.Backend) {
 	p.metricWriter.UpstreamMetric(&gatekeeper.UpstreamMetric{
 		Event:     event,
 		Timestamp: time.Now(),
