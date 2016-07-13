@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"github.com/hashicorp/go-plugin"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
@@ -12,6 +13,7 @@ type BasePlugin interface {
 	Stop() error
 	Configure(map[string]interface{}) error
 	Heartbeat() error
+	Kill()
 }
 
 // basePluginRPCClient is the type that all pluginClients implicitly implement
@@ -30,11 +32,13 @@ type basePluginRPCClient interface {
 
 type BasePluginClient struct {
 	rpcClient basePluginRPCClient
+	client    *plugin.Client
 }
 
-func NewBasePluginClient(rpcClient basePluginRPCClient) *BasePluginClient {
+func NewBasePluginClient(rpcClient basePluginRPCClient, client *plugin.Client) *BasePluginClient {
 	return &BasePluginClient{
 		rpcClient: rpcClient,
+		client:    client,
 	}
 }
 
@@ -52,4 +56,8 @@ func (b *BasePluginClient) Configure(args map[string]interface{}) error {
 
 func (b *BasePluginClient) Heartbeat() error {
 	return b.rpcClient.Heartbeat()
+}
+
+func (b *BasePluginClient) Kill() {
+	b.client.Kill()
 }
