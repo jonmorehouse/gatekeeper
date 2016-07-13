@@ -4,28 +4,28 @@ import (
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/jonmorehouse/gatekeeper/internal"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/internal"
 )
 
-type addUpstreamArgs struct {
+type AddUpstreamArgs struct {
 	Upstream *gatekeeper.Upstream
 }
-type addUpstreamResp struct {
+type AddUpstreamResp struct {
 	Err *gatekeeper.Error
 }
 
-type removeUpstreamArgs struct {
+type RemoveUpstreamArgs struct {
 	UpstreamID gatekeeper.UpstreamID
 }
-type removeUpstreamResp struct {
+type RemoveUpstreamResp struct {
 	Err *gatekeeper.Error
 }
 
-type routeRequestArgs struct {
+type RouteRequestArgs struct {
 	Req *gatekeeper.Request
 }
-type routeRequestResp struct {
+type RouteRequestResp struct {
 	Upstream *gatekeeper.Upstream
 	Req      *gatekeeper.Request
 	Err      *gatekeeper.Error
@@ -42,10 +42,10 @@ type RPCClient struct {
 }
 
 func (c *RPCClient) AddUpstream(upstream *gatekeeper.Upstream) *gatekeeper.Error {
-	args := &addUpstreamArgs{
+	args := &AddUpstreamArgs{
 		Upstream: upstream,
 	}
-	resp := &addUpstreamResp{}
+	resp := &AddUpstreamResp{}
 
 	if err := c.client.Call("Plugin.AddUpstream", args, resp); err != nil {
 		return gatekeeper.NewError(err)
@@ -55,10 +55,10 @@ func (c *RPCClient) AddUpstream(upstream *gatekeeper.Upstream) *gatekeeper.Error
 }
 
 func (c *RPCClient) RemoveUpstream(upstreamID gatekeeper.UpstreamID) *gatekeeper.Error {
-	args := &removeUpstreamArgs{
+	args := &RemoveUpstreamArgs{
 		UpstreamID: upstreamID,
 	}
-	resp := &removeUpstreamResp{}
+	resp := &RemoveUpstreamResp{}
 
 	if err := c.client.Call("Plugin.RemoveUpstream", args, resp); err != nil {
 		return gatekeeper.NewError(err)
@@ -68,10 +68,10 @@ func (c *RPCClient) RemoveUpstream(upstreamID gatekeeper.UpstreamID) *gatekeeper
 }
 
 func (c *RPCClient) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, *gatekeeper.Error) {
-	args := &routeRequestArgs{
+	args := &RouteRequestArgs{
 		Req: req,
 	}
-	resp := &routeRequestResp{}
+	resp := &RouteRequestResp{}
 
 	if err := c.client.Call("Plugin.RouteRequest", args, resp); err != nil {
 		return nil, args.Req, gatekeeper.NewError(err)
@@ -88,21 +88,21 @@ type RPCServer struct {
 	*internal.BasePluginRPCServer
 }
 
-func (s *RPCServer) AddUpstream(args *addUpstreamArgs, resp *addUpstreamResp) error {
+func (s *RPCServer) AddUpstream(args *AddUpstreamArgs, resp *AddUpstreamResp) error {
 	if err := s.impl.AddUpstream(args.Upstream); err != nil {
 		resp.Err = gatekeeper.NewError(err)
 	}
 	return nil
 }
 
-func (s *RPCServer) RemoveUpstream(args *removeUpstreamArgs, resp *removeUpstreamResp) error {
+func (s *RPCServer) RemoveUpstream(args *RemoveUpstreamArgs, resp *RemoveUpstreamResp) error {
 	if err := s.impl.RemoveUpstream(args.UpstreamID); err != nil {
 		resp.Err = gatekeeper.NewError(err)
 	}
 	return nil
 }
 
-func (s *RPCServer) RouteRequest(args *routeRequestArgs, resp *routeRequestResp) error {
+func (s *RPCServer) RouteRequest(args *RouteRequestArgs, resp *RouteRequestResp) error {
 	upstream, req, err := s.impl.RouteRequest(args.Req)
 	if err != nil {
 		resp.Err = gatekeeper.NewError(err)

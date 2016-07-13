@@ -5,22 +5,22 @@ import (
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/jonmorehouse/gatekeeper/internal"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/internal"
 )
 
-type setManagerArgs struct {
+type SetManagerArgs struct {
 	ConnID uint32
 }
 
-type setManagerResp struct {
+type SetManagerResp struct {
 	Err *gatekeeper.Error
 }
 
-type upstreamMetricArgs struct {
+type UpstreamMetricArgs struct {
 	Metrics []*gatekeeper.UpstreamMetric
 }
-type upstreamMetricResp struct {
+type UpstreamMetricResp struct {
 	Errs []*gatekeeper.Error
 }
 
@@ -49,8 +49,8 @@ func (c *RPCClient) SetManager(manager Manager) *gatekeeper.Error {
 		c.broker.AcceptAndServe(connID, &managerRPCServer)
 	}()
 
-	args := &setManagerArgs{connID}
-	resp := &setManagerResp{}
+	args := &SetManagerArgs{connID}
+	resp := &SetManagerResp{}
 
 	if err := c.client.Call("Plugin.SetManager", args, resp); err != nil {
 		return gatekeeper.NewError(err)
@@ -66,10 +66,10 @@ func (c *RPCClient) SetManager(manager Manager) *gatekeeper.Error {
 }
 
 func (c *RPCClient) UpstreamMetric(metrics []*gatekeeper.UpstreamMetric) []*gatekeeper.Error {
-	callArgs := upstreamMetricArgs{
+	callArgs := UpstreamMetricArgs{
 		Metrics: metrics,
 	}
-	callResp := upstreamMetricResp{}
+	callResp := UpstreamMetricResp{}
 
 	if err := c.client.Call("Plugin.UpstreamMetric", &callArgs, &callResp); err != nil {
 		return []*gatekeeper.Error{gatekeeper.NewError(err)}
@@ -97,7 +97,7 @@ func (s *RPCServer) Stop(args *internal.StopArgs, resp *internal.StopResp) error
 	return s.BasePluginRPCServer.Stop(args, resp)
 }
 
-func (s *RPCServer) SetManager(args *setManagerArgs, resp *setManagerResp) error {
+func (s *RPCServer) SetManager(args *SetManagerArgs, resp *SetManagerResp) error {
 	if s.managerRPC != nil {
 		return gatekeeper.NewError(fmt.Errorf("Manager already started; must stop first"))
 	}
@@ -128,7 +128,7 @@ func (s *RPCServer) SetManager(args *setManagerArgs, resp *setManagerResp) error
 	return s.impl.SetManager(&ManagerClient{ManagerRPC: managerRPC})
 }
 
-func (s *RPCServer) UpstreamMetric(args *upstreamMetricArgs, resp *upstreamMetricResp) error {
+func (s *RPCServer) UpstreamMetric(args *UpstreamMetricArgs, resp *UpstreamMetricResp) error {
 	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.UpstreamMetric(metric); err != nil {

@@ -4,36 +4,36 @@ import (
 	"net/rpc"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/jonmorehouse/gatekeeper/internal"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/internal"
 )
 
-type addBackendArgs struct {
+type AddBackendArgs struct {
 	Backend  *gatekeeper.Backend
 	Upstream gatekeeper.UpstreamID
 }
-type addBackendResp struct {
+type AddBackendResp struct {
 	Err *gatekeeper.Error
 }
 
-type removeBackendArgs struct {
+type RemoveBackendArgs struct {
 	Backend *gatekeeper.Backend
 }
-type removeBackendResp struct {
+type RemoveBackendResp struct {
 	Err *gatekeeper.Error
 }
 
-type upstreamMetricArgs struct {
+type UpstreamMetricArgs struct {
 	Metrics []*gatekeeper.UpstreamMetric
 }
-type upstreamMetricResp struct {
+type UpstreamMetricResp struct {
 	Errs []*gatekeeper.Error
 }
 
-type getBackendArgs struct {
+type GetBackendArgs struct {
 	Upstream gatekeeper.UpstreamID
 }
-type getBackendResp struct {
+type GetBackendResp struct {
 	Backend *gatekeeper.Backend
 	Err     *gatekeeper.Error
 }
@@ -49,11 +49,11 @@ type RPCClient struct {
 }
 
 func (c *RPCClient) AddBackend(upstream gatekeeper.UpstreamID, backend *gatekeeper.Backend) *gatekeeper.Error {
-	callArgs := addBackendArgs{
+	callArgs := AddBackendArgs{
 		Upstream: upstream,
 		Backend:  backend,
 	}
-	callResp := addBackendResp{}
+	callResp := AddBackendResp{}
 	if err := c.client.Call("Plugin.AddBackend", &callArgs, &callResp); err != nil {
 		return gatekeeper.NewError(err)
 	}
@@ -61,10 +61,10 @@ func (c *RPCClient) AddBackend(upstream gatekeeper.UpstreamID, backend *gatekeep
 }
 
 func (c *RPCClient) RemoveBackend(backend *gatekeeper.Backend) *gatekeeper.Error {
-	callArgs := removeBackendArgs{
+	callArgs := RemoveBackendArgs{
 		Backend: backend,
 	}
-	callResp := removeBackendResp{}
+	callResp := RemoveBackendResp{}
 	if err := c.client.Call("Plugin.RemoveBackend", &callArgs, &callResp); err != nil {
 		return gatekeeper.NewError(err)
 	}
@@ -72,10 +72,10 @@ func (c *RPCClient) RemoveBackend(backend *gatekeeper.Backend) *gatekeeper.Error
 }
 
 func (c *RPCClient) UpstreamMetric(metrics []*gatekeeper.UpstreamMetric) []*gatekeeper.Error {
-	callArgs := upstreamMetricArgs{
+	callArgs := UpstreamMetricArgs{
 		Metrics: metrics,
 	}
-	callResp := upstreamMetricResp{}
+	callResp := UpstreamMetricResp{}
 
 	if err := c.client.Call("Plugin.UpstreamMetric", &callArgs, &callResp); err != nil {
 		return []*gatekeeper.Error{gatekeeper.NewError(err)}
@@ -85,10 +85,10 @@ func (c *RPCClient) UpstreamMetric(metrics []*gatekeeper.UpstreamMetric) []*gate
 }
 
 func (c *RPCClient) GetBackend(upstream gatekeeper.UpstreamID) (*gatekeeper.Backend, *gatekeeper.Error) {
-	callArgs := getBackendArgs{
+	callArgs := GetBackendArgs{
 		Upstream: upstream,
 	}
-	callResp := getBackendResp{}
+	callResp := GetBackendResp{}
 	if err := c.client.Call("Plugin.GetBackend", &callArgs, &callResp); err != nil {
 		return nil, gatekeeper.NewError(err)
 	}
@@ -102,19 +102,19 @@ type RPCServer struct {
 	*internal.BasePluginRPCServer
 }
 
-func (s *RPCServer) AddBackend(args *addBackendArgs, resp *addBackendResp) error {
+func (s *RPCServer) AddBackend(args *AddBackendArgs, resp *AddBackendResp) error {
 	resp.Err = gatekeeper.NewError(s.impl.AddBackend(args.Upstream, args.Backend))
 	return nil
 }
 
-func (s *RPCServer) RemoveBackend(args *removeBackendArgs, resp *removeBackendResp) error {
+func (s *RPCServer) RemoveBackend(args *RemoveBackendArgs, resp *RemoveBackendResp) error {
 	if err := s.impl.RemoveBackend(args.Backend); err != nil {
 		resp.Err = gatekeeper.NewError(err)
 	}
 	return nil
 }
 
-func (s *RPCServer) UpstreamMetric(args *upstreamMetricArgs, resp *upstreamMetricResp) error {
+func (s *RPCServer) UpstreamMetric(args *UpstreamMetricArgs, resp *UpstreamMetricResp) error {
 	errs := make([]*gatekeeper.Error, 0, len(args.Metrics))
 	for _, metric := range args.Metrics {
 		if err := s.impl.UpstreamMetric(metric); err != nil {
@@ -126,7 +126,7 @@ func (s *RPCServer) UpstreamMetric(args *upstreamMetricArgs, resp *upstreamMetri
 	return nil
 }
 
-func (s *RPCServer) GetBackend(args *getBackendArgs, resp *getBackendResp) error {
+func (s *RPCServer) GetBackend(args *GetBackendArgs, resp *GetBackendResp) error {
 	backend, err := s.impl.GetBackend(args.Upstream)
 	resp.Backend = backend
 	resp.Err = gatekeeper.NewError(err)
