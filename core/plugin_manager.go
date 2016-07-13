@@ -30,7 +30,7 @@ type PluginManager interface {
 	Grab(func(Plugin))
 }
 
-func NewPluginManager(cmd string, args map[string]interface{}, pluginType PluginType, broadcaster Broadcaster, metricWriter MetricWriterClient) PluginManager {
+func NewPluginManager(cmd string, args map[string]interface{}, pluginType PluginType, metricWriter MetricWriterClient) PluginManager {
 	pluginName := filepath.Base(strings.SplitN(cmd, " ", 2)[0])
 
 	return &pluginManager{
@@ -54,7 +54,6 @@ func NewPluginManager(cmd string, args map[string]interface{}, pluginType Plugin
 
 type pluginManager struct {
 	metricWriter MetricWriterClient
-	broadcaster  Broadcaster
 
 	pluginType PluginType
 	pluginName string

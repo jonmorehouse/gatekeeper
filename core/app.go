@@ -19,9 +19,32 @@ type App struct {
 	metricWriter MetricWriter
 }
 
-func buildPlugins(options *Options, metricWriter MetricWriter) (map[PluginType][]PluginManager, error) {
-	return map[PluginType][]PluginManager(nil), nil
+func buildPlugins(options *Options, metricWriter MetricWriter) map[PluginType][]PluginManager {
+	plugins := make(map[PluginType][]PluginManager)
 
+	if !options.UseLocalRouter {
+		plugin := NewPluginManager(options.RouterPlugin, options.RouterPluginArgs, RouterPlugin, metricWriter)
+		plugins[RouterPlugin] = []PluginManager{plugin}
+	}
+
+	if !options.UseLocalLoadBalancer {
+		plugin := NewPluginManager(options.LoadBalancerPlugin, options.LoadBalancerPluginArgs, LoadBalancerPlugin, metricWriter)
+		plugins[LoadBalancerPlugin] = []PluginManager{plugin}
+	}
+
+	for _, plugin := range options.UpstreamPlugins {
+		plugins[UpstreamPlugin] = append(plugins[UpstreamPlugin], NewPluginManager(plugin, options.UpstreamPluginArgs, UpstreamPlugin, metricWriter))
+	}
+
+	for _, plugin := range options.ModifierPlugins {
+		plugins[ModifierPlugin] = append(plugins[ModifierPlugin], NewPluginManager(plugin, options.ModifierPluginArgs, ModifierPlugin, metricWriter))
+	}
+
+	for _, plugin := range options.MetricPlugins {
+		plugins[MetricPlugin] = append(plugins[MetricPlugin], NewPluginManager(plugin, options.MetricPluginArgs, MetricPlugin, metricWriter))
+	}
+
+	return plugins
 }
 
 func New(options Options) (*App, error) {
@@ -35,10 +58,7 @@ func New(options Options) (*App, error) {
 		Event:     gatekeeper.AppStartedEvent,
 	})
 
-	plugins, err := buildPlugins(&options, metricWriter)
-	if err != nil {
-		return nil, err
-	}
+	plugins := buildPlugins(&options, metricWriter)
 
 	if plugins[UpstreamPlugin] == nil {
 		return nil, ConfigurationError

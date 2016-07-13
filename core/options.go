@@ -24,13 +24,13 @@ var InvalidProxyTimeoutError = errors.New("invalid proxy-timeout")
 
 type Options struct {
 	// optional plugin configuration
-	RouterPlugin        string
-	RouterPluginArgs    map[string]interface{}
-	RouterPluginEnabled bool
+	RouterPlugin     string
+	RouterPluginArgs map[string]interface{}
+	UseLocalRouter   bool
 
-	LoadBalancerPlugin        string
-	LoadBalancerPluginArgs    map[string]interface{}
-	LoadBalancerPluginEnabled bool
+	LoadBalancerPlugin     string
+	LoadBalancerPluginArgs map[string]interface{}
+	UseLocalLoadBalancer   bool
 
 	// required plugins configuration
 	UpstreamPlugins    []string

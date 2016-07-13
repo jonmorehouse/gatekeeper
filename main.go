@@ -81,7 +81,10 @@ func prefixedArgs(flags []*flag.Flag, prefix string) map[string]interface{} {
 
 func main() {
 	// plugin configuration
+	useLocalLoadBalancer := flag.Bool("local-loadbalancer", true, "use the provided in process load balancer. default: true")
 	loadBalancerPlugin := flag.String("loadbalancer-plugin", "simple-loadbalancer", "loadbalancer-plugin cmd. default: simple-loadbalancer")
+
+	useLocalRouter := flag.Bool("local-router", true, "use the provided in process router. default: true")
 	routerPlugin := flag.String("router-plugin", "example-router", "router-plugin cmd. default: example-router")
 
 	// accept comma delimited lists of plugins for metric, upstream and modifier plugins
@@ -134,12 +137,13 @@ func main() {
 		ModifierPlugins:    strings.Split(*modifierPlugins, ","),
 		ModifierPluginArgs: prefixedArgs(extraFlags, "-modifier-"),
 
-		LoadBalancerPlugin:        *loadBalancerPlugin,
-		LoadBalancerPluginArgs:    prefixedArgs(extraFlags, "-loadbalancer-"),
-		LoadBalancerPluginEnabled: loadBalancerPluginEnabled,
+		LoadBalancerPlugin:     *loadBalancerPlugin,
+		LoadBalancerPluginArgs: prefixedArgs(extraFlags, "-loadbalancer-"),
+		UseLocalLoadBalancer:   *useLocalLoadBalancer,
 
-		RouterPlugin:        *routerPlugin,
-		RouterPluginEnabled: routerPluginEnabled,
+		RouterPlugin:     *routerPlugin,
+		RouterPluginArgs: prefixedArgs(extraFlags, "-router-"),
+		UseLocalRouter:   *useLocalRouter,
 
 		HTTPPublic:     *httpPublic,
 		HTTPPublicPort: *httpPublicPort,
