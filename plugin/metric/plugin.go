@@ -31,7 +31,7 @@ type Plugin interface {
 // around *RPCClient. This is merely a wrapper which returns a clean interface
 // with error interfaces instead of *gatekeeper.Error types
 type PluginClient interface {
-	internal.BasePlugin
+	internal.BasePluginClient
 
 	// Metrics are batch written over RPC on the client side, so as to allow for less noise over the wire
 	WriteEventMetrics([]*gatekeeper.EventMetric) []error
@@ -50,7 +50,7 @@ func NewPluginClient(rpcClient *RPCClient, client *plugin.Client) PluginClient {
 
 type pluginClient struct {
 	pluginRPC *RPCClient
-	*internal.BasePluginClient
+	internal.BasePluginClient
 }
 
 func (p *pluginClient) WriteEventMetrics(metrics []*gatekeeper.EventMetric) []error {

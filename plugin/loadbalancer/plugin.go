@@ -29,7 +29,7 @@ type Plugin interface {
 // around *RPCClient. This is merely a wrapper which returns a clean interface
 // with error interfaces instead of *gatekeeper.Error types
 type PluginClient interface {
-	internal.BasePlugin
+	internal.BasePluginClient
 
 	AddBackend(gatekeeper.UpstreamID, *gatekeeper.Backend) error
 	RemoveBackend(*gatekeeper.Backend) error
@@ -46,7 +46,7 @@ func NewPluginClient(rpcClient *RPCClient, client *plugin.Client) PluginClient {
 
 type pluginClient struct {
 	pluginRPC *RPCClient
-	*internal.BasePluginClient
+	internal.BasePluginClient
 }
 
 func (p *pluginClient) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {

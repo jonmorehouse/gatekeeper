@@ -13,7 +13,6 @@ type BasePlugin interface {
 	Stop() error
 	Configure(map[string]interface{}) error
 	Heartbeat() error
-	Kill()
 }
 
 // basePluginRPCClient is the type that all pluginClients implicitly implement
@@ -23,6 +22,14 @@ type BasePlugin interface {
 // `BasePluginClient` type and we'd like it to _only_ use the interface. This
 // allows us to pass in RPCClients from different plugin packages, of different
 // types, as long as they meet this interface
+type BasePluginClient interface {
+	Start() error
+	Stop() error
+	Configure(map[string]interface{}) error
+	Heartbeat() error
+	Kill()
+}
+
 type basePluginRPCClient interface {
 	Start() *gatekeeper.Error
 	Stop() *gatekeeper.Error
@@ -30,34 +37,34 @@ type basePluginRPCClient interface {
 	Heartbeat() *gatekeeper.Error
 }
 
-type BasePluginClient struct {
-	rpcClient basePluginRPCClient
-	client    *plugin.Client
-}
-
-func NewBasePluginClient(rpcClient basePluginRPCClient, client *plugin.Client) *BasePluginClient {
-	return &BasePluginClient{
+func NewBasePluginClient(rpcClient basePluginRPCClient, client *plugin.Client) BasePluginClient {
+	return &basePluginClient{
 		rpcClient: rpcClient,
 		client:    client,
 	}
 }
 
-func (b *BasePluginClient) Start() error {
+type basePluginClient struct {
+	rpcClient basePluginRPCClient
+	client    *plugin.Client
+}
+
+func (b *basePluginClient) Start() error {
 	return b.rpcClient.Start()
 }
 
-func (b *BasePluginClient) Stop() error {
+func (b *basePluginClient) Stop() error {
 	return b.rpcClient.Stop()
 }
 
-func (b *BasePluginClient) Configure(args map[string]interface{}) error {
+func (b *basePluginClient) Configure(args map[string]interface{}) error {
 	return b.rpcClient.Configure(args)
 }
 
-func (b *BasePluginClient) Heartbeat() error {
+func (b *basePluginClient) Heartbeat() error {
 	return b.rpcClient.Heartbeat()
 }
 
-func (b *BasePluginClient) Kill() {
+func (b *basePluginClient) Kill() {
 	b.client.Kill()
 }
