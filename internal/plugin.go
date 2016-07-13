@@ -50,19 +50,32 @@ type basePluginClient struct {
 }
 
 func (b *basePluginClient) Start() error {
-	return b.rpcClient.Start()
+	err := b.rpcClient.Start()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (b *basePluginClient) Stop() error {
-	return b.rpcClient.Stop()
+	if err := b.rpcClient.Stop(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (b *basePluginClient) Configure(args map[string]interface{}) error {
-	return b.rpcClient.Configure(args)
+	if err := b.rpcClient.Configure(args); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (b *basePluginClient) Heartbeat() error {
-	return b.rpcClient.Heartbeat()
+	if err := b.rpcClient.Heartbeat(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (b *basePluginClient) Kill() {

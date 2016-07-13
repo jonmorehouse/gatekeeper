@@ -8,7 +8,7 @@ import (
 
 var InternalError = errors.New("internal error")
 
-var PluginTimeoutError = errors.New("plugin timeout error")
+var PluginTimeoutErr = errors.New("plugin timeout error")
 var InternalPluginError = errors.New("internal plugin error")
 var InternalTimeoutError = errors.New("internal timeout error")
 var InternalBroadcastError = errors.New("internal broadcast error")
@@ -38,6 +38,7 @@ var ModifierPluginError = errors.New("modifier plugin error")
 var ProxyTimeoutError = errors.New("proxy timeout error")
 
 var InvalidEventErr = errors.New("invalid event error")
+var InvalidPluginErr = errors.New("invalid plugin type error")
 var DuplicateUpstreamErr = errors.New("duplicate upstream error")
 var DuplicateBackendErr = errors.New("duplicate backend error")
 var BackendAddressErr = errors.New("invalid backend error")

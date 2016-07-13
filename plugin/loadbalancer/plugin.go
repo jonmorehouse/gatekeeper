@@ -50,16 +50,24 @@ type pluginClient struct {
 }
 
 func (p *pluginClient) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
-	return gatekeeper.ErrorToError(p.pluginRPC.AddBackend(upstreamID, backend))
+	if err := p.pluginRPC.AddBackend(upstreamID, backend); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *pluginClient) RemoveBackend(backend *gatekeeper.Backend) error {
-	return gatekeeper.ErrorToError(p.pluginRPC.RemoveBackend(backend))
+	if err := p.pluginRPC.RemoveBackend(backend); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *pluginClient) WriteUpstreamMetrics(metrics []*gatekeeper.UpstreamMetric) []error {
-	errs := p.pluginRPC.UpstreamMetric(metrics)
-	return gatekeeper.ErrorsToErrors(errs)
+	if errs := p.pluginRPC.UpstreamMetric(metrics); errs != nil {
+		return gatekeeper.ErrorsToErrors(errs)
+	}
+	return nil
 }
 
 func (p *pluginClient) GetBackend(upstreamID gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {

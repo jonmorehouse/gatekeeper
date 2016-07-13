@@ -18,8 +18,11 @@ func NewUpstreamManager(broadcaster Broadcaster, metricWriter MetricWriterClient
 	return &upstreamManager{
 		broadcaster: broadcaster,
 
-		upstreams: make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
-		backends:  make(map[gatekeeper.BackendID]*gatekeeper.Backend),
+		upstreams:        make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
+		backends:         make(map[gatekeeper.BackendID]*gatekeeper.Backend),
+		backendUpstreams: make(map[gatekeeper.BackendID]gatekeeper.UpstreamID),
+
+		metricWriter: metricWriter,
 	}
 }
 

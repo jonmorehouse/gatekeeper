@@ -57,13 +57,23 @@ type pluginClient struct {
 }
 
 func (p *pluginClient) AddUpstream(upstream *gatekeeper.Upstream) error {
-	return p.pluginRPC.AddUpstream(upstream)
+	if err := p.pluginRPC.AddUpstream(upstream); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *pluginClient) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error {
-	return p.pluginRPC.RemoveUpstream(upstreamID)
+	if err := p.pluginRPC.RemoveUpstream(upstreamID); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *pluginClient) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
-	return p.pluginRPC.RouteRequest(req)
+	upstream, req, err := p.pluginRPC.RouteRequest(req)
+	if err != nil {
+		return upstream, req, err
+	}
+	return upstream, req, nil
 }

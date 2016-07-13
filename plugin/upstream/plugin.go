@@ -46,10 +46,15 @@ type pluginClient struct {
 }
 
 func (p *pluginClient) SetManager(manager Manager) error {
-	return p.pluginRPC.SetManager(manager)
+	if err := p.pluginRPC.SetManager(manager); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *pluginClient) WriteUpstreamMetrics(metrics []*gatekeeper.UpstreamMetric) []error {
-	errs := p.pluginRPC.UpstreamMetric(metrics)
-	return gatekeeper.ErrorsToErrors(errs)
+	if errs := p.pluginRPC.UpstreamMetric(metrics); errs != nil {
+		return gatekeeper.ErrorsToErrors(errs)
+	}
+	return nil
 }

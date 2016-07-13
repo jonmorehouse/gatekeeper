@@ -81,7 +81,7 @@ func (c *RPCClient) UpstreamMetric(metrics []*gatekeeper.UpstreamMetric) []*gate
 		return []*gatekeeper.Error{gatekeeper.NewError(err)}
 	}
 
-	return callResp.Errs
+	return []*gatekeeper.Error(nil)
 }
 
 func (c *RPCClient) GetBackend(upstream gatekeeper.UpstreamID) (*gatekeeper.Backend, *gatekeeper.Error) {

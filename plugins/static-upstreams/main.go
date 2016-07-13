@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/go-yaml/yaml"
-	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 	"github.com/mitchellh/go-homedir"
 )
 

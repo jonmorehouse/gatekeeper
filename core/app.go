@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
 type startStop interface {
@@ -13,10 +14,11 @@ type startStop interface {
 
 type App struct {
 	// the server type adheres to the startStop interface, by convenience.
-	servers      []startStopper
-	plugins      map[PluginType][]PluginManager
-	components   []startStopper
-	metricWriter MetricWriter
+	servers         []startStopper
+	plugins         map[PluginType][]PluginManager
+	components      []startStopper
+	metricWriter    MetricWriter
+	upstreamManager UpstreamManager
 }
 
 func buildPlugins(options *Options, metricWriter MetricWriter) map[PluginType][]PluginManager {
@@ -159,9 +161,10 @@ func New(options Options) (*App, error) {
 			loadBalancer,
 			router,
 		},
-		plugins:      plugins,
-		servers:      servers,
-		metricWriter: metricWriter,
+		plugins:         plugins,
+		servers:         servers,
+		metricWriter:    metricWriter,
+		upstreamManager: upstreamManager,
 	}, nil
 }
 
@@ -177,12 +180,31 @@ func (a *App) Start() error {
 
 	// start all plugins
 	for _, pluginType := range []PluginType{MetricPlugin, UpstreamPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin} {
-		if err := CallWith(pluginManagersToInterfaces(a.plugins[pluginType]), func(i interface{}) error {
-			return i.(startStopper).Start()
-		}); err != nil {
-			return err
+		for _, pluginManager := range a.plugins[pluginType] {
+			if err := pluginManager.Build(); err != nil {
+				return err
+			}
+
+			// for UpstreamPlugins, we intercept the init process and add the upstreamManager
+			if pluginType == UpstreamPlugin {
+				if err := pluginManager.Call("SetManager", func(plugin Plugin) error {
+					upstreamPlugin, ok := plugin.(upstream_plugin.PluginClient)
+					if !ok {
+						return InvalidPluginErr
+					}
+					return upstreamPlugin.SetManager(a.upstreamManager)
+				}); err != nil {
+					return err
+				}
+			}
+
+			if err := pluginManager.Start(); err != nil {
+				return err
+			}
 		}
 	}
+
+	return nil
 
 	// start the metricWriter, so it can begin flushing metrics
 	if err := a.metricWriter.Start(); err != nil {

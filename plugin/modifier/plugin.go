@@ -69,13 +69,24 @@ type pluginClient struct {
 
 func (p *pluginClient) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
 	req, err := p.pluginRPC.ModifyRequest(req)
-	return req, gatekeeper.ErrorToError(err)
+	if err != nil {
+		return req, err
+	}
+	return req, err
 }
 
 func (p *pluginClient) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
-	return p.pluginRPC.ModifyResponse(req, resp)
+	resp, err := p.pluginRPC.ModifyResponse(req, resp)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
 }
 
 func (p *pluginClient) ModifyErrorResponse(respErr error, req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
-	return p.pluginRPC.ModifyErrorResponse(gatekeeper.NewError(respErr), req, resp)
+	resp, err := p.pluginRPC.ModifyErrorResponse(gatekeeper.NewError(respErr), req, resp)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
 }

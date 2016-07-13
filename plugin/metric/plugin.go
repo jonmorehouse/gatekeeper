@@ -54,26 +54,36 @@ type pluginClient struct {
 }
 
 func (p *pluginClient) WriteEventMetrics(metrics []*gatekeeper.EventMetric) []error {
-	errs := p.pluginRPC.EventMetric(metrics)
-	return gatekeeper.ErrorsToErrors(errs)
+	if errs := p.pluginRPC.EventMetric(metrics); errs != nil {
+		return gatekeeper.ErrorsToErrors(errs)
+	}
+	return nil
 }
 
 func (p *pluginClient) WriteProfilingMetrics(metrics []*gatekeeper.ProfilingMetric) []error {
-	errs := p.pluginRPC.ProfilingMetric(metrics)
-	return gatekeeper.ErrorsToErrors(errs)
+	if errs := p.pluginRPC.ProfilingMetric(metrics); errs != nil {
+		return gatekeeper.ErrorsToErrors(errs)
+	}
+	return nil
 }
 
 func (p *pluginClient) WritePluginMetrics(metrics []*gatekeeper.PluginMetric) []error {
-	errs := p.pluginRPC.PluginMetric(metrics)
-	return gatekeeper.ErrorsToErrors(errs)
+	if errs := p.pluginRPC.PluginMetric(metrics); errs != nil {
+		return gatekeeper.ErrorsToErrors(errs)
+	}
+	return nil
 }
 
 func (p *pluginClient) WriteRequestMetrics(metrics []*gatekeeper.RequestMetric) []error {
-	errs := p.pluginRPC.RequestMetric(metrics)
-	return gatekeeper.ErrorsToErrors(errs)
+	if errs := p.pluginRPC.RequestMetric(metrics); errs != nil {
+		return gatekeeper.ErrorsToErrors(errs)
+	}
+	return nil
 }
 
 func (p *pluginClient) WriteUpstreamMetrics(metrics []*gatekeeper.UpstreamMetric) []error {
-	errs := p.pluginRPC.UpstreamMetric(metrics)
-	return gatekeeper.ErrorsToErrors(errs)
+	if errs := p.pluginRPC.UpstreamMetric(metrics); errs != nil {
+		return gatekeeper.ErrorsToErrors(errs)
+	}
+	return nil
 }

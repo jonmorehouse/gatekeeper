@@ -15,6 +15,7 @@ import (
 )
 
 type PluginManager interface {
+	Build() error
 	Start() error
 	Stop(time.Duration) error
 
@@ -23,6 +24,7 @@ type PluginManager interface {
 	// timeouts, by default timing out a call based upon the configured
 	// timeout
 	Call(string, func(Plugin) error) error
+	CallOnce(string, func(Plugin) error) error
 
 	// Grab a plugin under the readLock, under normal circumstances, we
 	// most likely wouldn't do anything substantial here. MetricWriter uses
@@ -41,14 +43,14 @@ func NewPluginManager(cmd string, args map[string]interface{}, pluginType Plugin
 		pluginCmd:  cmd,
 		pluginArgs: args,
 
-		instance: nil,
-		workers:  0,
-
-		callTimeout: time.Millisecond * 5,
-		callRetries: 3,
+		callTimeout:       time.Millisecond * 5,
+		callRetries:       3,
+		heartbeatInterval: time.Millisecond * 500,
 
 		stopCh: make(chan struct{}),
 		doneCh: make(chan struct{}),
+
+		HookManager: NewHookManager(),
 	}
 }
 
@@ -61,8 +63,8 @@ type pluginManager struct {
 	pluginArgs map[string]interface{}
 
 	instance Plugin
-	workers  uint
 
+	workers           uint
 	callTimeout       time.Duration
 	callRetries       uint
 	heartbeatInterval time.Duration
@@ -72,75 +74,50 @@ type pluginManager struct {
 	doneCh chan struct{}
 
 	sync.RWMutex
+	HookManager
+}
+
+func (p *pluginManager) Build() error {
+	if err := p.buildInstance(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *pluginManager) Start() error {
-	if err := p.buildInstance(); err != nil {
-		p.Stop(time.Duration(0))
+	if err := p.startInstance(); err != nil {
 		return err
 	}
-
-	// start the heartbeat worker
-	p.Lock()
-	p.workers += 1
-	p.Unlock()
-	go p.worker()
-	return nil
+	p.HookManager.AddHook(p.heartbeatInterval, p.heartbeat)
+	return p.HookManager.Start()
 }
 
 func (p *pluginManager) Stop(dur time.Duration) error {
 	errs := NewMultiError()
-	var wg sync.WaitGroup
-
-	p.RLock()
-	workers := p.workers
-	p.RUnlock()
-
-	// for each worker, emit a stop message and wait for the corresponding
-	// done message to be passed back
-	_, ok := CallWithTimeout(dur, func() error {
-		wg.Add(int(workers))
-		for i := 0; i < int(workers); i++ {
-			p.stopCh <- struct{}{}
-		}
-
-		go func() {
-			for _ = range p.doneCh {
-				wg.Done()
-			}
-		}()
-
-		wg.Wait()
-		close(p.doneCh)
-		return nil
-	})
-	if !ok {
-		errs.Add(InternalPluginError)
+	if err := p.HookManager.Stop(dur); err != nil {
+		errs.Add(err)
 	}
 
 	// stop and kill the plugin and its connection
-	err := p.Call("Stop", func(plugin Plugin) error {
-		return plugin.Stop()
-	})
-	if err != nil {
-		errs.Add(err)
-	}
-
-	err = p.Call("Kill", func(plugin Plugin) error {
-		plugin.Kill()
+	if err := p.CallOnce("Stop", func(plugin Plugin) error {
+		if plugin != nil {
+			return plugin.Stop()
+		}
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		errs.Add(err)
 	}
 
-	// clean up internal state
-	p.Lock()
-	p.workers = 0
-	p.instance = nil
-	p.Unlock()
+	if err := p.CallOnce("Kill", func(plugin Plugin) error {
+		if plugin != nil {
+			plugin.Kill()
+		}
+		return nil
+	}); err != nil {
+		errs.Add(err)
+	}
 
-	return err
+	return errs.ToErr()
 }
 
 func (p *pluginManager) Grab(cb func(Plugin)) {
@@ -177,10 +154,28 @@ func (p *pluginManager) Call(method string, cb func(Plugin) error) error {
 		})
 
 		if !ok {
-			return PluginTimeoutError
+			return PluginTimeoutErr
 		}
 		return err
 	})
+}
+
+func (p *pluginManager) CallOnce(method string, cb func(Plugin) error) error {
+	err, ok := CallWithTimeout(p.callTimeout, func() error {
+		p.RLock()
+		defer p.RUnlock()
+
+		startTS := time.Now()
+		err := cb(p.instance)
+		p.pluginMetric(method, time.Now().Sub(startTS), err)
+		return err
+	})
+
+	if !ok {
+		return PluginTimeoutErr
+	}
+
+	return err
 }
 
 // build builds a plugin instance, configuring and starting it
@@ -206,44 +201,28 @@ func (p *pluginManager) buildInstance() error {
 		return err
 	}
 
-	startTS := time.Now()
-	err = instance.Configure(p.pluginArgs)
-	p.pluginMetric("Configure", time.Now().Sub(startTS), err)
-	if err != nil {
-		return err
-	}
-
-	startTS = time.Now()
-	err = instance.Start()
-	p.pluginMetric("Start", time.Now().Sub(startTS), err)
-	if err != nil {
-		return err
-	}
-
 	p.Lock()
 	defer p.Unlock()
 	p.instance = instance
 	return nil
 }
 
-// worker is responsible for sending heartbeats off to the plugin after a configurable amount of time
-func (p *pluginManager) worker() {
-	ticker := time.NewTicker(p.heartbeatInterval)
-
-	for {
-		select {
-		case <-ticker.C:
-			p.heartbeat()
-		case <-p.stopCh:
-			p.doneCh <- struct{}{}
-			return
-		}
+func (p *pluginManager) startInstance() error {
+	err := p.CallOnce("Configure", func(plugin Plugin) error {
+		return plugin.Configure(p.pluginArgs)
+	})
+	if err != nil {
+		return err
 	}
+
+	return p.CallOnce("Start", func(plugin Plugin) error {
+		return plugin.Start()
+	})
 }
 
 // heartbeat is responsible for calling the Heartbeat method on the plugin with
 // a timeout and retry. If it continually fails, then we stop and rebuild the plugin.
-func (p *pluginManager) heartbeat() {
+func (p *pluginManager) heartbeat() error {
 	// Try to call the heartbeat method three times. Each call to the
 	// plugin will attempt up to p.retries times, respecting the call
 	// timeout configured in this plugin.
@@ -254,11 +233,13 @@ func (p *pluginManager) heartbeat() {
 	})
 
 	if err == nil {
-		return
+		return nil
 	}
 
 	p.eventMetric(gatekeeper.PluginRestartedEvent)
 	p.buildInstance()
+	p.startInstance()
+	return err
 }
 
 func (p *pluginManager) eventMetric(event gatekeeper.Event) {

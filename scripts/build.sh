@@ -73,6 +73,7 @@ else
   exit 0
 fi
 
+exit 0
 if [[ $GATEKEEPER_DEV = "1" ]];then
   echo "building each gatekeeper plugin in dev mode..."
   for dir in `find $DIR/plugins -depth 1 -type d`; do
