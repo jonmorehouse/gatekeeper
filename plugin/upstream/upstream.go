@@ -39,7 +39,7 @@ func NewClient(name string, cmd string) (PluginClient, error) {
 		return nil, fmt.Errorf("Unable to cast plugin to the correct type")
 	}
 
-	return NewPluginClient(pluginRPC), nil
+	return NewPluginClient(pluginRPC, client), nil
 
 }
 

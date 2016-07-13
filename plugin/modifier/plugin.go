@@ -1,8 +1,9 @@
 package modifier
 
 import (
-	"github.com/jonmorehouse/gatekeeper/internal"
+	"github.com/hashicorp/go-plugin"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/internal"
 )
 
 // Plugin is the interface which a plugin will implement and pass to `RunPlugin`
@@ -54,10 +55,10 @@ type PluginClient interface {
 	ModifyErrorResponse(error, *gatekeeper.Request, *gatekeeper.Response) (*gatekeeper.Response, error)
 }
 
-func NewPluginClient(rpcClient *RPCClient) PluginClient {
+func NewPluginClient(rpcClient *RPCClient, client *plugin.Client) PluginClient {
 	return &pluginClient{
 		rpcClient,
-		internal.NewBasePluginClient(rpcClient),
+		internal.NewBasePluginClient(rpcClient, client),
 	}
 }
 
