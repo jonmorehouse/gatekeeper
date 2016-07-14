@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log"
 	"net/url"
 	"sync"
 	"time"
@@ -76,6 +77,7 @@ func (m *upstreamManager) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error
 
 	m.eventMetric(gatekeeper.UpstreamRemovedEvent)
 	m.upstreamMetric(gatekeeper.UpstreamRemovedEvent, upstream, nil)
+	log.Println("upstream broadcasted...")
 	m.broadcaster.Publish(&UpstreamEvent{
 		Event:      gatekeeper.UpstreamRemovedEvent,
 		Upstream:   upstream,
@@ -108,6 +110,8 @@ func (m *upstreamManager) AddBackend(upstreamID gatekeeper.UpstreamID, backend *
 
 	m.eventMetric(gatekeeper.BackendAddedEvent)
 	m.upstreamMetric(gatekeeper.BackendAddedEvent, upstream, backend)
+
+	log.Println("backend broadcasted...")
 	m.broadcaster.Publish(&UpstreamEvent{
 		Event:      gatekeeper.BackendAddedEvent,
 		Upstream:   upstream,

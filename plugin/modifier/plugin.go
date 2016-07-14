@@ -72,7 +72,7 @@ func (p *pluginClient) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Reque
 	if err != nil {
 		return req, err
 	}
-	return req, err
+	return req, nil
 }
 
 func (p *pluginClient) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {

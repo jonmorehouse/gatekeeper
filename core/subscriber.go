@@ -16,7 +16,6 @@ type Subscriber interface {
 func NewSubscriber(broadcaster Broadcaster) Subscriber {
 	return &subscriber{
 		hooks:       make(map[gatekeeper.Event][]func(*UpstreamEvent)),
-		eventCh:     make(EventCh),
 		broadcaster: broadcaster,
 	}
 }
@@ -25,15 +24,14 @@ type subscriber struct {
 	hooks       map[gatekeeper.Event][]func(*UpstreamEvent)
 	broadcaster Broadcaster
 
-	eventCh EventCh
-	doneCh  chan error
-	stopCh  chan struct{}
+	doneCh chan error
+	stopCh chan struct{}
 
 	sync.RWMutex
 }
 
 func (s *subscriber) Start() error {
-	go s.worker()
+	s.worker()
 	return nil
 }
 
@@ -64,8 +62,8 @@ func (s *subscriber) worker() {
 	var wg sync.WaitGroup
 
 	// TODO update this code when listeners for non-upstream events are added
-	ch := make(EventCh, 5)
-	listenerID := s.broadcaster.AddListener(ch, []gatekeeper.Event{
+	eventCh := make(EventCh, 5)
+	listenerID := s.broadcaster.AddListener(eventCh, []gatekeeper.Event{
 		gatekeeper.UpstreamAddedEvent,
 		gatekeeper.UpstreamRemovedEvent,
 		gatekeeper.BackendAddedEvent,
@@ -100,21 +98,24 @@ func (s *subscriber) worker() {
 		}
 	}
 
-	var stopped bool
-	for {
-		select {
-		case <-s.stopCh:
-			break
-		case event, _ := <-s.eventCh:
-			handler(event)
+	go func() {
+		var stopped bool
+		for {
+			select {
+			case <-s.stopCh:
+				stopped = true
+			case event, _ := <-eventCh:
+				handler(event)
+			default:
+			}
+
+			if stopped {
+				s.broadcaster.RemoveListener(listenerID)
+				close(eventCh)
+			}
 		}
 
-		if stopped {
-			s.broadcaster.RemoveListener(listenerID)
-			close(s.eventCh)
-		}
-	}
-
-	wg.Wait()
-	s.doneCh <- errs.ToErr()
+		wg.Wait()
+		s.doneCh <- errs.ToErr()
+	}()
 }

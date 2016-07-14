@@ -66,7 +66,7 @@ type upstreamAndBackends struct {
 }
 
 func (s *staticUpstreams) Configure(args map[string]interface{}) error {
-	rawConfigFile, ok := args["config"]
+	rawConfigFile, ok := args["upstream-config"]
 	if !ok {
 		return ConfigFileRequiredError
 	}
@@ -125,7 +125,10 @@ func (s *staticUpstreams) Configure(args map[string]interface{}) error {
 	return nil
 }
 
-func (s *staticUpstreams) Heartbeat() error { return nil }
+func (s *staticUpstreams) Heartbeat() error {
+	log.Println("static-upstreams heartbeat ...")
+	return nil
+}
 
 func (s *staticUpstreams) Start() error {
 	if s.manager == nil {
@@ -134,10 +137,12 @@ func (s *staticUpstreams) Start() error {
 
 	// emit each upstream and its backends to the parent process
 	for _, item := range s.data {
+		log.Println("adding upstream ...")
 		if err := s.manager.AddUpstream(item.upstream); err != nil {
 			return err
 		}
 
+		log.Println("adding backend ...")
 		for _, backend := range item.backends {
 			if err := s.manager.AddBackend(item.upstream.ID, backend); err != nil {
 				return err

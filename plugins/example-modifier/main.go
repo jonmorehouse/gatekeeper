@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	modifier_plugin "github.com/jonmorehouse/gatekeeper/plugin/modifier"
 )
 
 type Plugin struct {
@@ -33,6 +33,7 @@ func (*Plugin) Stop() error {
 }
 
 func (p *Plugin) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
+	log.Println("request modifier called...")
 	if req.Header == nil {
 		req.Header = make(map[string][]string)
 	}
@@ -42,6 +43,7 @@ func (p *Plugin) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, er
 }
 
 func (Plugin) ModifyResponse(req *gatekeeper.Request, resp *gatekeeper.Response) (*gatekeeper.Response, error) {
+	log.Println("response modifier called...")
 	resp.Header.Set("X-Request-ID", req.Header["X-Request-ID"][0])
 	return resp, nil
 }
@@ -52,7 +54,7 @@ func (Plugin) ModifyErrorResponse(err error, req *gatekeeper.Request, resp *gate
 }
 
 func main() {
-	if err := modifier_plugin.RunPlugin("modifier", &Plugin{}); err != nil {
+	if err := modifier_plugin.RunPlugin("example-modifier", &Plugin{}); err != nil {
 		log.Fatal(err)
 	}
 }

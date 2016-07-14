@@ -157,9 +157,9 @@ func New(options Options) (*App, error) {
 	return &App{
 		components: []startStopper{
 			modifier,
-			upstreamManager,
-			loadBalancer,
 			router,
+			loadBalancer,
+			upstreamManager,
 		},
 		plugins:         plugins,
 		servers:         servers,
@@ -201,10 +201,11 @@ func (a *App) Start() error {
 			if err := pluginManager.Start(); err != nil {
 				return err
 			}
+
+			// register the plugin for metrics to be written to it
+			a.metricWriter.AddPlugin(pluginManager)
 		}
 	}
-
-	return nil
 
 	// start the metricWriter, so it can begin flushing metrics
 	if err := a.metricWriter.Start(); err != nil {

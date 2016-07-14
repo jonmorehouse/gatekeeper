@@ -211,6 +211,7 @@ func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	modifierStartTS := time.Now()
 	req, err = s.modifier.ModifyRequest(req)
 	if err != nil {
+		log.Println(err)
 		resp := gatekeeper.NewErrorResponse(500, err)
 		metric.Error = err
 		metric.Response = resp

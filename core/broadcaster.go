@@ -1,6 +1,11 @@
 package core
 
-import "github.com/jonmorehouse/gatekeeper/gatekeeper"
+import (
+	"log"
+	"sync"
+
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+)
 
 type EventCh chan Event
 
@@ -62,10 +67,16 @@ func NewBroadcaster() Broadcaster {
 
 type broadcaster struct {
 	eventListeners map[gatekeeper.Event]map[ListenerID]EventCh
+
+	sync.RWMutex
 }
 
 func (b *broadcaster) AddListener(ch EventCh, events []gatekeeper.Event) ListenerID {
+	log.Println("listener added ...")
 	listenerID := ListenerID(gatekeeper.GetUUID())
+
+	b.Lock()
+	defer b.Unlock()
 
 	for _, event := range events {
 		_, found := b.eventListeners[event]
@@ -80,19 +91,23 @@ func (b *broadcaster) AddListener(ch EventCh, events []gatekeeper.Event) Listene
 }
 
 func (b *broadcaster) RemoveListener(id ListenerID) {
+	b.Lock()
+	defer b.Unlock()
 	for event, _ := range b.eventListeners {
 		delete(b.eventListeners[event], id)
 	}
 }
 
 func (b *broadcaster) Publish(event Event) {
+	b.RLock()
 	listeners, ok := b.eventListeners[event.Type()]
+	b.RUnlock()
 	if !ok {
 		return
 	}
 
 	for _, eventCh := range listeners {
-		go func(EventCh) {
+		go func(eventCh EventCh) {
 			eventCh <- event
 		}(eventCh)
 

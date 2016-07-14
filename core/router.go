@@ -66,6 +66,7 @@ func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstrea
 		return upstream, req, nil
 	}
 
+	log.Println(l.upstreams)
 	// check the upstream store for any and all matches
 	for _, upstream := range l.upstreams {
 		if InStrList(req.Host, upstream.Hostnames) {
@@ -84,11 +85,23 @@ func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstrea
 }
 
 func (l *localRouter) addUpstreamHook(event *UpstreamEvent) {
-
+	l.Lock()
+	defer l.Unlock()
+	l.upstreams[event.UpstreamID] = event.Upstream
 }
 
 func (l *localRouter) removeUpstreamHook(event *UpstreamEvent) {
+	l.Lock()
+	defer l.Unlock()
 
+	delete(l.upstreams, event.UpstreamID)
+	for _, host := range event.Upstream.Hostnames {
+		delete(l.hostnameCache, host)
+	}
+
+	for _, prefix := range event.Upstream.Prefixes {
+		delete(l.prefixCache, prefix)
+	}
 }
 
 func NewPluginRouter(broadcaster Broadcaster, pluginManager PluginManager) Router {
@@ -160,6 +173,5 @@ func (p *pluginRouter) removeUpstreamHook(event *UpstreamEvent) {
 
 	if callErr != nil {
 		log.Println(callErr)
-
 	}
 }

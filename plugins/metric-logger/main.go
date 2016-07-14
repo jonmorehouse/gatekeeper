@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
-	metric_plugin "github.com/jonmorehouse/gatekeeper/plugin/metric"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	metric_plugin "github.com/jonmorehouse/gatekeeper/plugin/metric"
 )
 
 // Plugin is a type that implements the event_plugin.Plugin interface
@@ -14,11 +14,17 @@ func (*Plugin) Start() error {
 	log.Println("metric-logger started...")
 	return nil
 }
+
 func (*Plugin) Stop() error {
 	log.Println("metric-logger stopped...")
 	return nil
 }
-func (*Plugin) Heartbeat() error                       { return nil }
+
+func (*Plugin) Heartbeat() error {
+	log.Println("metric-logger heartbeat ...")
+	return nil
+}
+
 func (*Plugin) Configure(map[string]interface{}) error { return nil }
 
 func (*Plugin) EventMetric(metric *gatekeeper.EventMetric) error {

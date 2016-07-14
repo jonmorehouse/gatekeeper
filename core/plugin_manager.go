@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -161,6 +162,7 @@ func (p *pluginManager) Call(method string, cb func(Plugin) error) error {
 }
 
 func (p *pluginManager) CallOnce(method string, cb func(Plugin) error) error {
+	log.Println("Plugin.CallOnce method:", method, " type: ", p.pluginType.String())
 	err, ok := CallWithTimeout(p.callTimeout, func() error {
 		p.RLock()
 		defer p.RUnlock()

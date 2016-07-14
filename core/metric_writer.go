@@ -76,7 +76,11 @@ type metricWriter struct {
 	sync.RWMutex
 }
 
-func (m *metricWriter) Start() error                      { return nil }
+func (m *metricWriter) Start() error {
+	go m.worker()
+	return nil
+}
+
 func (m *metricWriter) Stop(duration time.Duration) error { return nil }
 
 func (m *metricWriter) AddPlugin(plugin PluginManager) {
