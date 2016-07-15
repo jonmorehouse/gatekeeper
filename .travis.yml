@@ -9,7 +9,7 @@ script:
   # install dependencies
   - ./scripts/setup
 
-  # build everything for sanity's sake!
+  # build core and plugin binaries
   - ./scripts/dev all
     
   # test packages

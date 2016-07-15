@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 # 
 # Install dependencies for test / build / dev and benchmarking. This runs GPM
 # installing all current dependencies. Secondly, this symlinks the local
