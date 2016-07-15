@@ -4,6 +4,8 @@ Plugin-based http(s) communications.
 * issues: https://github.com/jonmorehouse/gatekeeper/issues
 * current release: https://github.com/jonmorehouse/gatekeeper/releases/0.0.1
 
+[[!build status](https://travis-ci.org/jonmorehouse/gatekeeper.svg?branch=master)]
+
 **Disclaimer** this isn't real software yet! Follow along at https://github.com/jonmorehouse/gatekeeper/pulls
 
 Gatekeeper is an http proxy that exposes aspects of an http request to plugin authors over RPC. By building hooks into the proxy lifecycle, Gatekeeper allows fine-tuned control over request routing, error handling, request modification, response modification and much more. 
