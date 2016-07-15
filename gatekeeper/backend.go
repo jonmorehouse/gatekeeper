@@ -17,4 +17,5 @@ type Backend struct {
 	ID          BackendID
 	Address     string
 	Healthcheck string
+	Extra       map[string]interface{}
 }

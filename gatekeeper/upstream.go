@@ -30,6 +30,7 @@ type Upstream struct {
 	Hostnames []string
 	Prefixes  []string
 	Timeout   time.Duration
+	Extra     map[string]interface{}
 }
 
 func (u Upstream) HasHostname(name string) bool {
