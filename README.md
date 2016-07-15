@@ -1,6 +1,9 @@
 # Gatekeeper
 Plugin-based http(s) communications.
 
+* issues: https://github.com/jonmorehouse/gatekeeper/issues
+* current release: https://github.com/jonmorehouse/gatekeeper/releases/0.0.1
+
 **Disclaimer** this isn't real software yet! Follow along at https://github.com/jonmorehouse/gatekeeper/pulls
 
 Gatekeeper is an http proxy that exposes aspects of an http request to plugin authors over RPC. By building hooks into the proxy lifecycle, Gatekeeper allows fine-tuned control over request routing, error handling, request modification, response modification and much more. 
@@ -169,7 +172,7 @@ type Plugin interface {
     RemoveUpstream(gatekeeper.UpstreamID) error
 
     // accept a request and determine which upstream to proxy it to
-	  RouteRequest(*gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error)
+    RouteRequest(*gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error)
 }
 ```
 
