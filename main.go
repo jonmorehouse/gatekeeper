@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/core"
+	core "github.com/jonmorehouse/gatekeeper/core"
 )
 
 func flagSetToMap(set *flag.FlagSet) map[string]interface{} {
