@@ -7,21 +7,21 @@ go:
 
 script:
   # install dependencies
-  - ./scripts/setup
+  - ./scripts/setup.sh
 
   # build core and plugin binaries
-  - ./scripts/dev all
+  - ./scripts/dev.sh all
     
   # test packages
-  - ./scripts/test core
-  - ./scripts/test internal
-  - ./scripts/test plugin/loadbalancer
-  - ./scripts/test plugin/modifier
-  - ./scripts/test plugin/metric
-  - ./scripts/test plugin/upstream
-  - ./scripts/test plugin/router
+  - ./scripts/test.sh core
+  - ./scripts/test.sh internal
+  - ./scripts/test.sh plugin/loadbalancer
+  - ./scripts/test.sh plugin/modifier
+  - ./scripts/test.sh plugin/metric
+  - ./scripts/test.sh plugin/upstream
+  - ./scripts/test.sh plugin/router
 
   # plugin tests
-  - ./scripts/test plugins/mysql-api-upstreams
-  - ./scripts/test plugins/simple-loadbalancer
-  - ./scripts/test plugins/static-upstreams
+  - ./scripts/test.sh plugins/mysql-api-upstreams
+  - ./scripts/test.sh plugins/simple-loadbalancer
+  - ./scripts/test.sh plugins/static-upstreams
