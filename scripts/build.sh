@@ -27,28 +27,36 @@ fi
 # 
 # Build packages
 #
-echo "building shared package ..."
-cd "$DIR/shared"
+echo "building gatekeeper package ..."
+cd "$DIR/gatekeeper"
 go build .
 
-echo "building plugin/upstream package ..."
-cd "$DIR/plugin/upstream"
-go build .
-
-echo "building plugin/loadbalancer package ..."
-cd "$DIR/plugin/loadbalancer"
+echo "building internal package ..."
+cd "$DIR/internal"
 go build .
 
 echo "building plugin/event package ..."
 cd "$DIR/plugin/metric"
 go build .
 
+echo "building plugin/loadbalancer package ..."
+cd "$DIR/plugin/loadbalancer"
+go build .
+
 echo "build plugin/modifier package ..."
 cd "$DIR/plugin/modifier"
 go build .
 
-echo "building gatekeeper core package ..."
-cd "$DIR/gatekeeper"
+echo "build plugin/router package ..."
+cd "$DIR/plugin/router"
+go build .
+
+echo "building plugin/upstream package ..."
+cd "$DIR/plugin/upstream"
+go build .
+
+echo "building core package ..."
+cd "$DIR/core"
 go build .
 
 
@@ -80,5 +88,3 @@ else
   echo "building gatekeeper plugins with release settings..."
   exit 0
 fi
-
-exit 0

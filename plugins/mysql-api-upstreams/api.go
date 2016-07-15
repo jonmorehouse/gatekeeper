@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 	"github.com/tylerb/graceful"
 )
 
@@ -29,7 +29,7 @@ type api struct {
 
 // formatted response for upstream and backend types
 type formattedUpstream struct {
-	ID        shared.UpstreamID `json:"id"`
+	ID        gatekeeper.UpstreamID `json:"id"`
 	Name      string            `json:"name"`
 	Protocols []string          `json:"protocols"`
 	Hostnames []string          `json:"hostnames"`
@@ -38,7 +38,7 @@ type formattedUpstream struct {
 }
 
 type formattedBackend struct {
-	ID          shared.BackendID `json:"id"`
+	ID          gatekeeper.BackendID `json:"id"`
 	Address     string           `json:"address"`
 	Healthcheck string           `json:"healthcheck"`
 }
@@ -75,33 +75,33 @@ type addUpstreamRequest struct {
 type addUpstreamResponse struct {
 	Status     string             `json:"status"`
 	Upstream   *formattedUpstream `json:"upstream"`
-	UpstreamID shared.UpstreamID  `json:"upstream_id"`
+	UpstreamID gatekeeper.UpstreamID  `json:"upstream_id"`
 }
 
 type addBackendRequest struct {
-	UpstreamID  shared.UpstreamID `json:"upstream_id"`
+	UpstreamID  gatekeeper.UpstreamID `json:"upstream_id"`
 	Address     string            `json:"address"`
 	Healthcheck string            `json:"healthcheck"`
 }
 
 type addBackendResponse struct {
 	Status     string             `json:"status"`
-	BackendID  shared.BackendID   `json:"backend_id"`
-	UpstreamID shared.UpstreamID  `json:"upstream_id"`
+	BackendID  gatekeeper.BackendID   `json:"backend_id"`
+	UpstreamID gatekeeper.UpstreamID  `json:"upstream_id"`
 	Backend    *formattedBackend  `json:"upstream"`
 	Upstream   *formattedUpstream `json:"upstream"`
 }
 
 type removeUpstreamRequest struct {
-	UpstreamID shared.UpstreamID `json:"upstream_id"`
+	UpstreamID gatekeeper.UpstreamID `json:"upstream_id"`
 }
 
 type removeBackendRequest struct {
-	BackendID shared.BackendID `json:"backend_id"`
+	BackendID gatekeeper.BackendID `json:"backend_id"`
 }
 
 // helper methods for casting backend / upstreams between request/response and in-memory types
-func newFormattedUpstream(upstream *shared.Upstream) *formattedUpstream {
+func newFormattedUpstream(upstream *gatekeeper.Upstream) *formattedUpstream {
 	protocols := make([]string, 0, len(upstream.Protocols))
 	for _, protocol := range upstream.Protocols {
 		protocols = append(protocols, protocol.String())
@@ -116,17 +116,17 @@ func newFormattedUpstream(upstream *shared.Upstream) *formattedUpstream {
 	}
 }
 
-func newUpstream(rawUpstream *addUpstreamRequest) (*shared.Upstream, error) {
+func newUpstream(rawUpstream *addUpstreamRequest) (*gatekeeper.Upstream, error) {
 	timeout, err := time.ParseDuration(rawUpstream.Timeout)
 	if err != nil {
 		return nil, err
 	}
 
-	protocolMappings := map[string]shared.Protocol{
-		shared.HTTPPublic.String():   shared.HTTPPublic,
-		shared.HTTPInternal.String(): shared.HTTPInternal,
+	protocolMappings := map[string]gatekeeper.Protocol{
+		gatekeeper.HTTPPublic.String():   gatekeeper.HTTPPublic,
+		gatekeeper.HTTPInternal.String(): gatekeeper.HTTPInternal,
 	}
-	protocols := make([]shared.Protocol, 0, len(rawUpstream.Protocols))
+	protocols := make([]gatekeeper.Protocol, 0, len(rawUpstream.Protocols))
 	for _, protocolString := range rawUpstream.Protocols {
 		protocol, ok := protocolMappings[protocolString]
 		if !ok {
@@ -136,8 +136,8 @@ func newUpstream(rawUpstream *addUpstreamRequest) (*shared.Upstream, error) {
 		protocols = append(protocols, protocol)
 	}
 
-	return &shared.Upstream{
-		ID:        shared.NilUpstreamID,
+	return &gatekeeper.Upstream{
+		ID:        gatekeeper.NilUpstreamID,
 		Name:      rawUpstream.Name,
 		Protocols: protocols,
 		Hostnames: rawUpstream.Hostnames,
@@ -146,7 +146,7 @@ func newUpstream(rawUpstream *addUpstreamRequest) (*shared.Upstream, error) {
 	}, nil
 }
 
-func newFormattedBackend(backend *shared.Backend) *formattedBackend {
+func newFormattedBackend(backend *gatekeeper.Backend) *formattedBackend {
 	return &formattedBackend{
 		ID:          backend.ID,
 		Address:     backend.Address,
@@ -154,14 +154,14 @@ func newFormattedBackend(backend *shared.Backend) *formattedBackend {
 	}
 }
 
-func newBackend(rawBackend *addBackendRequest) (*shared.Backend, error) {
+func newBackend(rawBackend *addBackendRequest) (*gatekeeper.Backend, error) {
 	_, err := url.Parse(rawBackend.Address)
 	if err != nil {
 		return nil, err
 	}
 
-	return &shared.Backend{
-		ID:          shared.NilBackendID,
+	return &gatekeeper.Backend{
+		ID:          gatekeeper.NilBackendID,
 		Address:     rawBackend.Address,
 		Healthcheck: rawBackend.Healthcheck,
 	}, nil
@@ -348,7 +348,7 @@ func (a *api) addBackend(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	upstreamID := shared.UpstreamID(rawBackend.UpstreamID)
+	upstreamID := gatekeeper.UpstreamID(rawBackend.UpstreamID)
 	backendID, err := a.manager.AddBackend(upstreamID, backend)
 	backend.ID = backendID
 	if err != nil {

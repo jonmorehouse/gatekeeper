@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 var testDataSourceName = "gatekeeper:gatekeeper@tcp(127.0.0.1:3306)/gatekeeper"
@@ -71,10 +71,10 @@ func TestDatabase__Disconnect__NotConnected(t *testing.T) {
 }
 
 func TestDatabase__AddUpstream(t *testing.T) {
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
 		Timeout:   time.Second * 2,
-		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 		Prefixes:  []string{"/test", "/testa"},
 		Hostnames: []string{"test", "test.com"},
 	}
@@ -101,10 +101,10 @@ func TestDatabase__AddUpstream(t *testing.T) {
 }
 
 func TestDatabase__AddUpstream__Duplicate(t *testing.T) {
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
 		Timeout:   time.Second * 2,
-		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 		Prefixes:  []string{"/test", "/testa"},
 		Hostnames: []string{"test", "test.com"},
 	}
@@ -114,7 +114,7 @@ func TestDatabase__AddUpstream__Duplicate(t *testing.T) {
 		Fail(t, err)
 	}
 
-	upstream.Protocols = []shared.Protocol{}
+	upstream.Protocols = []gatekeeper.Protocol{}
 	upstream.Prefixes = []string{}
 	upstream.Hostnames = []string{}
 	if _, err := db.AddUpstream(upstream); err == nil {
@@ -123,10 +123,10 @@ func TestDatabase__AddUpstream__Duplicate(t *testing.T) {
 }
 
 func TestDatabase__AddUpstream__DuplicatePrefix(t *testing.T) {
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
 		Timeout:   time.Second * 2,
-		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 		Prefixes:  []string{"/test"},
 		Hostnames: []string{"test", "test.com"},
 	}
@@ -137,7 +137,7 @@ func TestDatabase__AddUpstream__DuplicatePrefix(t *testing.T) {
 	}
 
 	upstream.Name = "testa"
-	upstream.Protocols = []shared.Protocol{}
+	upstream.Protocols = []gatekeeper.Protocol{}
 	upstream.Prefixes = []string{"/test"}
 	upstream.Hostnames = []string{}
 	if _, err := db.AddUpstream(upstream); err == nil {
@@ -146,10 +146,10 @@ func TestDatabase__AddUpstream__DuplicatePrefix(t *testing.T) {
 }
 
 func TestDatabase__AddUpstream__DuplicateHostname(t *testing.T) {
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
 		Timeout:   time.Second * 2,
-		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 		Prefixes:  []string{"/test"},
 		Hostnames: []string{"test", "test.com"},
 	}
@@ -160,7 +160,7 @@ func TestDatabase__AddUpstream__DuplicateHostname(t *testing.T) {
 	}
 
 	upstream.Name = "testa"
-	upstream.Protocols = []shared.Protocol{}
+	upstream.Protocols = []gatekeeper.Protocol{}
 	upstream.Prefixes = []string{}
 	if _, err := db.AddUpstream(upstream); err == nil {
 		Fail(t, DidNotError)
@@ -168,25 +168,25 @@ func TestDatabase__AddUpstream__DuplicateHostname(t *testing.T) {
 }
 
 func TestDatabase__AddUpstream__Duplicates(t *testing.T) {
-	upstreams := []*shared.Upstream{
-		&shared.Upstream{
+	upstreams := []*gatekeeper.Upstream{
+		&gatekeeper.Upstream{
 			Name:      "test",
 			Timeout:   time.Second,
-			Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPPublic},
+			Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPPublic},
 			Prefixes:  []string{"/test"},
 			Hostnames: []string{"test"},
 		},
-		&shared.Upstream{
+		&gatekeeper.Upstream{
 			Name:      "test",
 			Timeout:   time.Second,
-			Protocols: []shared.Protocol{shared.HTTPPublic},
+			Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic},
 			Prefixes:  []string{"/test", "/test"},
 			Hostnames: []string{"test"},
 		},
-		&shared.Upstream{
+		&gatekeeper.Upstream{
 			Name:      "test",
 			Timeout:   time.Second,
-			Protocols: []shared.Protocol{shared.HTTPPublic},
+			Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic},
 			Prefixes:  []string{"/test"},
 			Hostnames: []string{"test", "test"},
 		},
@@ -204,10 +204,10 @@ func TestDatabase__AddUpstream__Duplicates(t *testing.T) {
 }
 
 func TestDatabase__RemoveUpstream(t *testing.T) {
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
 		Timeout:   time.Second,
-		Protocols: []shared.Protocol{shared.HTTPPublic},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic},
 		Prefixes:  []string{"/test"},
 		Hostnames: []string{"test"},
 	}
@@ -241,20 +241,20 @@ func TestDatabase__RemoveUpstream(t *testing.T) {
 
 func TestDatabase__RemoveUpstream__NotFound(t *testing.T) {
 	db := setup(t)
-	if err := db.RemoveUpstream(shared.UpstreamID("invalid")); err != nil {
+	if err := db.RemoveUpstream(gatekeeper.UpstreamID("invalid")); err != nil {
 		Fail(t, fmt.Errorf("should not error when the backend doesn't exist"))
 	}
 	db.Disconnect()
-	if err := db.RemoveUpstream(shared.UpstreamID("invalid")); err == nil {
+	if err := db.RemoveUpstream(gatekeeper.UpstreamID("invalid")); err == nil {
 		Fail(t, DidNotError)
 	}
 }
 
 func TestDatabase__AddBackend(t *testing.T) {
 	db := setup(t)
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
-		Protocols: []shared.Protocol{},
+		Protocols: []gatekeeper.Protocol{},
 		Prefixes:  []string{},
 		Hostnames: []string{},
 		Timeout:   time.Second,
@@ -264,7 +264,7 @@ func TestDatabase__AddBackend(t *testing.T) {
 		Fail(t, err)
 	}
 
-	backend := &shared.Backend{
+	backend := &gatekeeper.Backend{
 		Address:     "localhost:port",
 		Healthcheck: "test",
 	}
@@ -273,7 +273,7 @@ func TestDatabase__AddBackend(t *testing.T) {
 	if err != nil {
 		Fail(t, err)
 	}
-	if backendID == shared.NilBackendID {
+	if backendID == gatekeeper.NilBackendID {
 		Fail(t, fmt.Errorf("Nil backend ID generated"))
 	}
 
@@ -289,9 +289,9 @@ func TestDatabase__AddBackend(t *testing.T) {
 
 func TestDatabase__AddBackend__Duplicate(t *testing.T) {
 	db := setup(t)
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
-		Protocols: []shared.Protocol{},
+		Protocols: []gatekeeper.Protocol{},
 		Prefixes:  []string{},
 		Hostnames: []string{},
 		Timeout:   time.Second,
@@ -301,7 +301,7 @@ func TestDatabase__AddBackend__Duplicate(t *testing.T) {
 		Fail(t, err)
 	}
 
-	backend := &shared.Backend{
+	backend := &gatekeeper.Backend{
 		Address:     "localhost",
 		Healthcheck: "/health",
 	}
@@ -310,7 +310,7 @@ func TestDatabase__AddBackend__Duplicate(t *testing.T) {
 	if err != nil {
 		Fail(t, err)
 	}
-	if backendID == shared.NilBackendID {
+	if backendID == gatekeeper.NilBackendID {
 		Fail(t, fmt.Errorf("Nil backend ID generated"))
 	}
 
@@ -318,32 +318,32 @@ func TestDatabase__AddBackend__Duplicate(t *testing.T) {
 	if err == nil {
 		Fail(t, DidNotError)
 	}
-	if backendID != shared.NilBackendID {
+	if backendID != gatekeeper.NilBackendID {
 		Fail(t, fmt.Errorf("Did Not return a nil backendID"))
 	}
 }
 
 func TestDatabase__AddBackend__UpstreamNotFound(t *testing.T) {
 	db := setup(t)
-	backend := &shared.Backend{
+	backend := &gatekeeper.Backend{
 		Address:     "localhost",
 		Healthcheck: "/health",
 	}
 
-	backendID, err := db.AddBackend(shared.NilUpstreamID, backend)
+	backendID, err := db.AddBackend(gatekeeper.NilUpstreamID, backend)
 	if err == nil {
 		Fail(t, DidNotError)
 	}
-	if backendID != shared.NilBackendID {
+	if backendID != gatekeeper.NilBackendID {
 		Fail(t, fmt.Errorf("Did not return a nil BackendID"))
 	}
 }
 
 func TestDatabase__RemoveBackend(t *testing.T) {
 	db := setup(t)
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
-		Protocols: []shared.Protocol{},
+		Protocols: []gatekeeper.Protocol{},
 		Prefixes:  []string{},
 		Hostnames: []string{},
 		Timeout:   time.Second,
@@ -353,7 +353,7 @@ func TestDatabase__RemoveBackend(t *testing.T) {
 		Fail(t, err)
 	}
 
-	backend := &shared.Backend{
+	backend := &gatekeeper.Backend{
 		Address:     "localhost",
 		Healthcheck: "/health",
 	}
@@ -377,7 +377,7 @@ func TestDatabase__RemoveBackend(t *testing.T) {
 
 func TestDatabase__RemoveBackend__NotFound(t *testing.T) {
 	db := setup(t)
-	fakeBackendID := shared.BackendID("invalid")
+	fakeBackendID := gatekeeper.BackendID("invalid")
 	if err := db.RemoveBackend(fakeBackendID); err != nil {
 		Fail(t, DidNotError)
 	}
@@ -385,24 +385,24 @@ func TestDatabase__RemoveBackend__NotFound(t *testing.T) {
 
 func TestDatabase__FetchUpstreams(t *testing.T) {
 	db := setup(t)
-	upstreams := []*shared.Upstream{
-		&shared.Upstream{
+	upstreams := []*gatekeeper.Upstream{
+		&gatekeeper.Upstream{
 			Name:      "1",
-			Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+			Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 			Prefixes:  []string{"/1"},
 			Hostnames: []string{"1.com"},
 			Timeout:   time.Millisecond * 100,
 		},
-		&shared.Upstream{
+		&gatekeeper.Upstream{
 			Name:      "2",
-			Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+			Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 			Prefixes:  []string{"/2"},
 			Hostnames: []string{"2.com"},
 			Timeout:   time.Millisecond * 100,
 		},
-		&shared.Upstream{
+		&gatekeeper.Upstream{
 			Name:      "3",
-			Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+			Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 			Prefixes:  []string{"/3"},
 			Hostnames: []string{"3.com"},
 			Timeout:   time.Millisecond * 100,
@@ -453,9 +453,9 @@ func TestDatabase__FetchUpstreams__NoneExist(t *testing.T) {
 
 func TestDatabase__FetchUpstreamBackends(t *testing.T) {
 	db := setup(t)
-	upstream := &shared.Upstream{
+	upstream := &gatekeeper.Upstream{
 		Name:      "test",
-		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 		Prefixes:  []string{"/test"},
 		Hostnames: []string{"test.com"},
 	}
@@ -464,7 +464,7 @@ func TestDatabase__FetchUpstreamBackends(t *testing.T) {
 		Fail(t, err)
 	}
 
-	backend := &shared.Backend{
+	backend := &gatekeeper.Backend{
 		Address:     "localhost",
 		Healthcheck: "/health",
 	}
@@ -472,7 +472,7 @@ func TestDatabase__FetchUpstreamBackends(t *testing.T) {
 	if err != nil {
 		Fail(t, err)
 	}
-	if backendID == shared.NilBackendID {
+	if backendID == gatekeeper.NilBackendID {
 		Fail(t, fmt.Errorf("did not return correct backendID"))
 	}
 
@@ -491,7 +491,7 @@ func TestDatabase__FetchUpstreamBackends(t *testing.T) {
 }
 func TestDatabase__FetchUpstreamBackends__UpstreamNotFound(t *testing.T) {
 	db := setup(t)
-	backends, err := db.FetchUpstreamBackends(shared.UpstreamID("invalid"))
+	backends, err := db.FetchUpstreamBackends(gatekeeper.UpstreamID("invalid"))
 	if err != nil {
 		Fail(t, err)
 	}

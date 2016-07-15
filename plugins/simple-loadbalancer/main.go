@@ -7,20 +7,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
-	"github.com/jonmorehouse/gatekeeper/shared"
 )
 
 // implements the loadbalancer.LoadBalancer plugin that is exposed over RPC
 type LoadBalancer struct {
 	sync.RWMutex
 
-	upstreamBackends map[shared.UpstreamID][]*shared.Backend
+	upstreamBackends map[gatekeeper.UpstreamID][]*gatekeeper.Backend
 }
 
 func NewLoadBalancer() *LoadBalancer {
 	return &LoadBalancer{
-		upstreamBackends: make(map[shared.UpstreamID][]*shared.Backend),
+		upstreamBackends: make(map[gatekeeper.UpstreamID][]*gatekeeper.Backend),
 	}
 }
 
@@ -29,30 +29,39 @@ func (l *LoadBalancer) Start() error {
 	log.Println("simple-loadbalancer plugin started...")
 	return nil
 }
+
 func (l *LoadBalancer) Stop() error {
 	log.Println("simple-loadbalancer plugin stopped...")
 	return nil
 }
+
 func (l *LoadBalancer) Configure(opts map[string]interface{}) error {
 	log.Println("configuring simple-loadbalancer ...")
-	log.Println(opts)
 	return nil
 }
-func (l *LoadBalancer) Heartbeat() error { return nil }
+
+func (l *LoadBalancer) Heartbeat() error {
+	log.Println("simple loadbalancer heartbeat ...")
+	return nil
+}
 
 // actual implementation of methods used
-func (l *LoadBalancer) AddBackend(upstream shared.UpstreamID, backend *shared.Backend) error {
+func (l *LoadBalancer) AddBackend(upstream gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
+	l.Lock()
+	defer l.Unlock()
+	log.Println("add backend")
 	log.Println(upstream, backend)
 
-	// TODO: handle duplicate backends here
 	if _, ok := l.upstreamBackends[upstream]; !ok {
-		l.upstreamBackends[upstream] = make([]*shared.Backend, 0, 1)
+		l.upstreamBackends[upstream] = make([]*gatekeeper.Backend, 0, 1)
 	}
 	l.upstreamBackends[upstream] = append(l.upstreamBackends[upstream], backend)
 	return nil
 }
 
-func (l *LoadBalancer) RemoveBackend(deleted *shared.Backend) error {
+func (l *LoadBalancer) RemoveBackend(deleted *gatekeeper.Backend) error {
+	l.Lock()
+	defer l.Unlock()
 	found := false
 
 	for upstream, backends := range l.upstreamBackends {
@@ -74,7 +83,14 @@ func (l *LoadBalancer) RemoveBackend(deleted *shared.Backend) error {
 	return nil
 }
 
-func (l *LoadBalancer) GetBackend(upstream shared.UpstreamID) (*shared.Backend, error) {
+func (l *LoadBalancer) UpstreamMetric(metric *gatekeeper.UpstreamMetric) error {
+	log.Println("upstream metric ...")
+	return nil
+}
+
+func (l *LoadBalancer) GetBackend(upstream gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {
+	l.RLock()
+	defer l.RUnlock()
 	backends, found := l.upstreamBackends[upstream]
 	if !found {
 		return nil, fmt.Errorf("UPSTREAM_NOT_FOUND")

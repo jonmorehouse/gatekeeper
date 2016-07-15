@@ -1,107 +1,64 @@
 package gatekeeper
 
 import (
-	"bytes"
-	"sync"
-
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"fmt"
+	"log"
 )
 
-// internal-error represents a set of errors for capturing irregular behaviour
-// inside of the gatekeeper core application.
-type internalError uint
-
-const (
-	// internal errors that should not happen
-	InternalError internalError = iota + 1
-	InternalPluginError
-	InternalTimeoutError
-	InternalEventError
-	InternalProxierError
-	InternalBroadcastError
-
-	// ConfigurationError
-	ConfigurationError
-
-	// Request Lifecycle Errors
-	ResponseWriteError
-	ServerShuttingDownError
-	UpstreamNotFoundError
-	BackendNotFoundError
-	ProxyTimeoutError
-	NoBackendsFoundError
-	BackendAddressError
-
-	// PluginErrors
-	LoadBalancerPluginError
-	ModifierPluginError
-)
-
-var internalErrorMapping = map[internalError]string{
-	InternalError:          "internal error",
-	InternalPluginError:    "internal plugin error",
-	InternalTimeoutError:   "internal timeout error",
-	InternalEventError:     "internal event error",
-	InternalBroadcastError: "internal broadcast error",
-
-	ConfigurationError: "invalid configuration",
-
-	ServerShuttingDownError: "server shutting down",
-	ResponseWriteError:      "response write error",
-	UpstreamNotFoundError:   "upstream not found",
-	BackendNotFoundError:    "backend not found",
-	BackendAddressError:     "backend address error",
-	NoBackendsFoundError:    "no upstream backends found",
-	InternalProxierError:    "internal proxier error",
-	LoadBalancerPluginError: "load balancer plugin error",
-	ModifierPluginError:     "modifier plugin error",
-	ProxyTimeoutError:       "proxy timeout error",
+// shared.Error is an RPC friendly error which is used for transferring errors
+// back and forth from plugins and the parent process. Behind the scenes, the
+// plugin/* packages are responsible for accepting generic error interfaces,
+// casting them to *shared.Error types and then transmitting them over the wire
+type Error struct {
+	Message string
 }
 
-func (i internalError) String() string {
-	desc, ok := internalErrorMapping[i]
-	if !ok {
-		shared.ProgrammingError("internalError string mapping not found")
-	}
-	return desc
-}
-
-func (i internalError) Error() string {
-	return i.String()
-}
-
-// goroutine safe error implementing type for managing multiple errors
-type MultiError struct {
-	errors []error
-	sync.RWMutex
-}
-
-func NewMultiError() *MultiError {
-	return &MultiError{
-		errors: make([]error, 0, 0),
-	}
-}
-
-func (m *MultiError) Add(err error) {
-	m.Lock()
-	defer m.Unlock()
-	m.errors = append(m.errors, err)
-}
-
-func (m *MultiError) Error() string {
-	var buffer bytes.Buffer
-	for _, e := range m.errors {
-		buffer.WriteString(e.Error())
-		buffer.WriteString("\n")
-	}
-
-	return buffer.String()
-}
-
-func (m *MultiError) ToErr() error {
-	if len(m.errors) == 0 {
+func NewError(err error) *Error {
+	if err == nil {
 		return nil
 	}
 
-	return m
+	return &Error{Message: err.Error()}
+}
+
+func (e *Error) Error() string {
+	return e.Message
+}
+
+// Cast errors back to classic errors so we can properly handle nil comparisons
+// without having to deal with interface / type comparisons where nil isn't
+// predictable
+func ErrorToError(e *Error) error {
+	if e == nil || e.Message == "" {
+		return nil
+	}
+	return e
+}
+
+func ErrorsToErrors(input []*Error) []error {
+	if len(input) == 0 {
+		return nil
+	}
+
+	errs := make([]error, 0, len(input))
+	for _, sharedErr := range input {
+		err := ErrorToError(sharedErr)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
+}
+
+var ProgrammingErrorFatal bool
+
+// ProgrammingError's should not happen in normal operations
+func ProgrammingError(msg string) {
+	err := fmt.Sprintf("programming error: ", msg)
+	if ProgrammingErrorFatal {
+		log.Fatal(err)
+	} else {
+		log.Print(err)
+	}
 }

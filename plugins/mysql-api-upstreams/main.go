@@ -1,14 +1,17 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
-	"github.com/jonmorehouse/gatekeeper/shared"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
+
+var NoManagerErr = errors.New("No manager set")
 
 type MultiError interface {
 	Add(error)
@@ -72,12 +75,14 @@ type Plugin struct {
 	rpcManager upstream_plugin.Manager
 	api        API
 
-	apiUpstream *shared.Upstream
-	apiBackend  *shared.Backend
+	apiUpstream *gatekeeper.Upstream
+	apiBackend  *gatekeeper.Backend
 }
 
-func (p *Plugin) Start(rpcManager upstream_plugin.Manager) error {
-	p.rpcManager = rpcManager
+func (p *Plugin) Start() error {
+	if p.rpcManager == nil {
+		return NoManagerErr
+	}
 
 	database := NewDatabase()
 	if err := database.Connect(p.config.DataSourceName); err != nil {
@@ -103,10 +108,10 @@ func (p *Plugin) Start(rpcManager upstream_plugin.Manager) error {
 	// once the server has been started, register this plugin as an
 	// upstream and backend itself so this can receive traffic through the
 	// gatekeeper proxy itself
-	p.apiUpstream = &shared.Upstream{
-		ID:        shared.NewUpstreamID(),
+	p.apiUpstream = &gatekeeper.Upstream{
+		ID:        gatekeeper.NewUpstreamID(),
 		Name:      "mysql-upstreams-api",
-		Protocols: []shared.Protocol{shared.HTTPPublic, shared.HTTPInternal},
+		Protocols: []gatekeeper.Protocol{gatekeeper.HTTPPublic, gatekeeper.HTTPInternal},
 		Hostnames: []string{},
 		Prefixes:  []string{"upstreams-plugin"},
 		Timeout:   time.Second * 5,
@@ -116,8 +121,8 @@ func (p *Plugin) Start(rpcManager upstream_plugin.Manager) error {
 		return fmt.Errorf("Unable to register plugin as an upstream itself")
 	}
 
-	p.apiBackend = &shared.Backend{
-		ID:          shared.NewBackendID(),
+	p.apiBackend = &gatekeeper.Backend{
+		ID:          gatekeeper.NewBackendID(),
 		Address:     fmt.Sprintf("http://127.0.0.1:%d", p.config.Port),
 		Healthcheck: "/health",
 	}
@@ -167,6 +172,16 @@ func (p *Plugin) Stop() error {
 
 func (p *Plugin) Heartbeat() error {
 	log.Println("plugin:mysql-upstreams-api received heartbeat from parent process")
+	return nil
+}
+
+func (p *Plugin) SetManager(manager upstream_plugin.Manager) error {
+	p.rpcManager = manager
+	return nil
+}
+
+func (p *Plugin) UpstreamMetric(metric *gatekeeper.UpstreamMetric) error {
+	log.Println("upstream metric ...")
 	return nil
 }
 
