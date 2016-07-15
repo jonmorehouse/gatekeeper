@@ -15,5 +15,7 @@ cd $DIR
 curl -s https://raw.githubusercontent.com/pote/gpm/v1.4.0/bin/gpm | bash
 
 echo -e "symlinking local copy into \$GOPATH/src/github.com/jonmorehouse/gatekeeper"
-mkdir -p $GOPATH/src/github.com/jonmorehouse
-ln -sf $DIR $GOPATH/src/github.com/jonmorehouse/
+if [ ! -d $GOPATH/src/github.com/jonmorehouse/gatekeeper ]; then
+  mkdir -p $GOPATH/src/github.com/jonmorehouse
+  ln -sf $DIR $GOPATH/src/github.com/jonmorehouse/
+fi
