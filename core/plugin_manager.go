@@ -31,6 +31,10 @@ type PluginManager interface {
 	// most likely wouldn't do anything substantial here. MetricWriter uses
 	// it for type switching to see which metrics to pass along
 	Grab(func(Plugin))
+
+	// information about the underlying plugin
+	Type() PluginType
+	Name() string
 }
 
 func NewPluginManager(cmd string, args map[string]interface{}, pluginType PluginType, metricWriter MetricWriterClient) PluginManager {
@@ -134,6 +138,7 @@ func (p *pluginManager) Grab(cb func(Plugin)) {
 // instead relies upon the callback returning Nil or a real error before
 // proceeding forward.
 func (p *pluginManager) Call(method string, cb func(Plugin) error) error {
+	log.Println("Plugin.Call method:", method, " type: ", p.pluginType.String())
 	calls := 0
 	defer func() {
 		if calls > 1 {
@@ -178,6 +183,14 @@ func (p *pluginManager) CallOnce(method string, cb func(Plugin) error) error {
 	}
 
 	return err
+}
+
+func (p *pluginManager) Type() PluginType {
+	return p.pluginType
+}
+
+func (p *pluginManager) Name() string {
+	return p.pluginName
 }
 
 // build builds a plugin instance, configuring and starting it

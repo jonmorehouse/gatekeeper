@@ -5,8 +5,8 @@ import (
 	"log"
 	"sync"
 
-	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
 )
 
 var NoRoutesAvailableError = errors.New("no routes available")
@@ -23,15 +23,19 @@ func NewRouter() router_plugin.Plugin {
 type router struct {
 	upstreams map[gatekeeper.UpstreamID]*gatekeeper.Upstream
 
-	*sync.RWMutex
+	sync.RWMutex
 }
 
-func (r *router) Start() error                                { return nil }
-func (r *router) Stop() error                                 { return nil }
-func (r *router) Heartbeat() error                            { return nil }
+func (r *router) Start() error { return nil }
+func (r *router) Stop() error  { return nil }
+func (r *router) Heartbeat() error {
+	log.Println("router heartbeat received")
+	return nil
+}
 func (r *router) Configure(opts map[string]interface{}) error { return nil }
 
 func (r *router) AddUpstream(upstream *gatekeeper.Upstream) error {
+	log.Println("adding upstream ....")
 	r.Lock()
 	defer r.Unlock()
 
@@ -58,10 +62,12 @@ func (r *router) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error {
 }
 
 func (r *router) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
+	log.Println("route request called ")
 	r.RLock()
 	defer r.RUnlock()
 
 	for _, upstream := range r.upstreams {
+		log.Println("Hi", upstream)
 		for _, hostname := range upstream.Hostnames {
 			if req.Host == hostname {
 				return upstream, req, nil

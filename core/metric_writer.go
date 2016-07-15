@@ -221,7 +221,7 @@ func (m *metricWriter) flush(buffer []gatekeeper.Metric) {
 				}
 
 				// write upstream metrics
-				if _, ok := pluginManager.(upstreamMetricsReceiver); ok {
+				if _, ok := plugin.(upstreamMetricsReceiver); ok {
 					pluginManager.Call("WriteUpstreamMetrics", func(plugin Plugin) error {
 						errs := plugin.(upstreamMetricsReceiver).WriteUpstreamMetrics(upstreamMetrics)
 						return (&MultiError{errs: errs}).ToErr()

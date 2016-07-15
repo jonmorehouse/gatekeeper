@@ -98,8 +98,8 @@ type pluginLoadBalancer struct {
 }
 
 func (l *pluginLoadBalancer) Start() error {
-	l.AddUpstreamEventHook(gatekeeper.BackendAddedEvent, l.backendAddedHook)
-	l.AddUpstreamEventHook(gatekeeper.BackendRemovedEvent, l.backendRemovedHook)
+	l.AddUpstreamEventHook(gatekeeper.BackendAddedEvent, l.addBackendHook)
+	l.AddUpstreamEventHook(gatekeeper.BackendRemovedEvent, l.removeBackendHook)
 	return l.Subscriber.Start()
 }
 
@@ -121,7 +121,8 @@ func (l *pluginLoadBalancer) GetBackend(upstreamID gatekeeper.UpstreamID) (*gate
 	return backend, err
 }
 
-func (l *pluginLoadBalancer) backendAddedHook(event *UpstreamEvent) {
+func (l *pluginLoadBalancer) addBackendHook(event *UpstreamEvent) {
+	log.Println("add backend call")
 	l.pluginManager.Call("AddBackend", func(plugin Plugin) error {
 		lbPlugin, ok := plugin.(loadbalancer_plugin.PluginClient)
 		if !ok {
@@ -138,7 +139,8 @@ func (l *pluginLoadBalancer) backendAddedHook(event *UpstreamEvent) {
 	})
 }
 
-func (l *pluginLoadBalancer) backendRemovedHook(event *UpstreamEvent) {
+func (l *pluginLoadBalancer) removeBackendHook(event *UpstreamEvent) {
+	log.Println("remove backend call")
 	l.pluginManager.Call("RemoveBackend", func(plugin Plugin) error {
 		lbPlugin, ok := plugin.(loadbalancer_plugin.PluginClient)
 		if !ok {

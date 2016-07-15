@@ -167,7 +167,7 @@ func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 		metric.RequestEndTS = time.Now()
 		metric.Latency = time.Now().Sub(start)
 		metric.InternalLatency = metric.Latency - metric.ProxyLatency
-		metric.ResponseType = gatekeeper.NewResponseType(metric.Response.StatusCode)
+		//metric.ResponseType = gatekeeper.NewResponseType(metric.Response.StatusCode)
 
 		// emit the request metric to the MetricWriter
 		s.metricWriter.RequestMetric(metric)

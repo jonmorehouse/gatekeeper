@@ -69,6 +69,7 @@ func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstrea
 	log.Println(l.upstreams)
 	// check the upstream store for any and all matches
 	for _, upstream := range l.upstreams {
+		log.Println(upstream)
 		if InStrList(req.Host, upstream.Hostnames) {
 			l.hostnameCache[req.Host] = upstream
 			return upstream, req, nil
@@ -85,12 +86,14 @@ func (l *localRouter) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstrea
 }
 
 func (l *localRouter) addUpstreamHook(event *UpstreamEvent) {
+	log.Println("add upstream...", event.Upstream)
 	l.Lock()
 	defer l.Unlock()
 	l.upstreams[event.UpstreamID] = event.Upstream
 }
 
 func (l *localRouter) removeUpstreamHook(event *UpstreamEvent) {
+	log.Println("remove upstream")
 	l.Lock()
 	defer l.Unlock()
 

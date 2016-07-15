@@ -179,7 +179,7 @@ func (a *App) Start() error {
 	}
 
 	// start all plugins
-	for _, pluginType := range []PluginType{MetricPlugin, UpstreamPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin} {
+	for _, pluginType := range []PluginType{MetricPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin, UpstreamPlugin} {
 		for _, pluginManager := range a.plugins[pluginType] {
 			if err := pluginManager.Build(); err != nil {
 				return err

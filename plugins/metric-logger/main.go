@@ -50,6 +50,7 @@ func (*Plugin) RequestMetric(metric *gatekeeper.RequestMetric) error {
 }
 
 func (*Plugin) UpstreamMetric(metric *gatekeeper.UpstreamMetric) error {
+	log.Println("upstream metric received")
 	return nil
 }
 

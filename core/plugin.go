@@ -23,7 +23,7 @@ const (
 var pluginTypeMapping = map[PluginType]string{
 	LoadBalancerPlugin: "loadbalancer-plugin",
 	ModifierPlugin:     "modifier-plugin",
-	MetricPlugin:       "event-plugin",
+	MetricPlugin:       "metric-plugin",
 	UpstreamPlugin:     "upstream-plugin",
 	RouterPlugin:       "router-plugin",
 }
