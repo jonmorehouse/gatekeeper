@@ -46,7 +46,7 @@ build()
     GOOS=$GOOS GOARCH=$GOARCH go build -o /tmp/$name/$plugin
   done
 
-  tar -czvf /tmp/$name.tar.gz /tmp/$name
+  tar -czvf /tmp/$name.tar.gz -C /tmp/$name `ls /tmp/$name`
   echo "archive built for $GOOS-$GOARCH at /tmp/$name.tar.gz"
 }
 
