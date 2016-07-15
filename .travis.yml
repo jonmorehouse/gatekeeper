@@ -1,0 +1,27 @@
+language: go
+go:
+  - 1.5
+  - 1.6
+  - release
+  - tip
+
+script:
+  # install dependencies
+  - ./scripts/setup
+
+  # build core and plugin binaries
+  - ./scripts/dev all
+    
+  # test packages
+  - ./scripts/test core
+  - ./scripts/test internal
+  - ./scripts/test plugin/loadbalancer
+  - ./scripts/test plugin/modifier
+  - ./scripts/test plugin/metric
+  - ./scripts/test plugin/upstream
+  - ./scripts/test plugin/router
+
+  # plugin tests
+  - ./scripts/test plugins/mysql-api-upstreams
+  - ./scripts/test plugins/simple-loadbalancer
+  - ./scripts/test plugins/static-upstreams
