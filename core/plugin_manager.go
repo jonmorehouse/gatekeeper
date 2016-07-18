@@ -48,7 +48,7 @@ func NewPluginManager(cmd string, args map[string]interface{}, pluginType Plugin
 		pluginCmd:  cmd,
 		pluginArgs: args,
 
-		callTimeout:       time.Millisecond * 5,
+		callTimeout:       time.Second * 100,
 		callRetries:       3,
 		heartbeatInterval: time.Millisecond * 500,
 

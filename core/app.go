@@ -187,7 +187,7 @@ func (a *App) Start() error {
 
 			// for UpstreamPlugins, we intercept the init process and add the upstreamManager
 			if pluginType == UpstreamPlugin {
-				if err := pluginManager.Call("SetManager", func(plugin Plugin) error {
+				if err := pluginManager.CallOnce("SetManager", func(plugin Plugin) error {
 					upstreamPlugin, ok := plugin.(upstream_plugin.PluginClient)
 					if !ok {
 						return InvalidPluginErr

@@ -188,8 +188,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println(options.UpstreamPluginArgs)
-
 	// build the server application which manages multiple servers
 	// listening on multiple ports.
 	app, err := core.New(*options)
