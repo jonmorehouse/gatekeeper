@@ -16,9 +16,7 @@ func NewConsulUpstreams() upstream_plugin.Plugin {
 	return &consulUpstreams{
 		consulWorkers: 10,
 
-		upstreams:       make(map[gatekeeper.UpstreamID]*gatekeeper.Upstream),
 		upstreamIndices: make(map[gatekeeper.UpstreamID]uint64),
-		backends:        make(map[gatekeeper.BackendID]*gatekeeper.Backend),
 		backendIndices:  make(map[gatekeeper.BackendID]uint64),
 
 		stopCh: make(chan struct{}, 1),
@@ -26,8 +24,7 @@ func NewConsulUpstreams() upstream_plugin.Plugin {
 }
 
 type consulUpstreams struct {
-	// manager is used to emit upstreams and backends to the gatekeeper parent process
-	manager upstream_plugin.Manager
+	manager gatekeeper.ServiceContainer
 
 	// this is the last index from consul that we have updated against
 	consulConfig  *consul.Config
@@ -35,9 +32,7 @@ type consulUpstreams struct {
 	consulIndex   uint64
 	consulWorkers int
 
-	upstreams       map[gatekeeper.UpstreamID]*gatekeeper.Upstream
 	upstreamIndices map[gatekeeper.UpstreamID]uint64
-	backends        map[gatekeeper.BackendID]*gatekeeper.Backend
 	backendIndices  map[gatekeeper.BackendID]uint64
 
 	stopCh chan struct{}
@@ -68,14 +63,14 @@ func (c *consulUpstreams) Stop() error {
 	// remove all upstreams and all backends from the parent process
 	c.RLock()
 	defer c.RUnlock()
-	for upstreamID, _ := range c.upstreams {
-		if err := c.manager.RemoveUpstream(upstreamID); err != nil {
+	for _, upstream := range c.manager.FetchAllUpstreams() {
+		if err := c.manager.RemoveUpstream(upstream.ID); err != nil {
 			log.Println(err)
 		}
 	}
 
-	for backendID, _ := range c.backends {
-		if err := c.manager.RemoveBackend(backendID); err != nil {
+	for _, backend := range c.manager.FetchAllBackends() {
+		if err := c.manager.RemoveBackend(backend.ID); err != nil {
 			log.Println(err)
 		}
 	}
@@ -117,7 +112,7 @@ func (c *consulUpstreams) Configure(opts map[string]interface{}) error {
 func (c *consulUpstreams) SetManager(manager upstream_plugin.Manager) error {
 	c.Lock()
 	defer c.Unlock()
-	c.manager = manager
+	c.manager = gatekeeper.NewSyncedServiceContainer(manager)
 	return nil
 }
 
@@ -247,10 +242,8 @@ func (c *consulUpstreams) fetchService(serviceName, tag string) error {
 	defer c.Unlock()
 
 	// update internal state
-	c.upstreams[upstream.ID] = upstream
 	c.upstreamIndices[upstream.ID] = c.consulIndex
 	for _, backend := range backends {
-		c.backends[backend.ID] = backend
 		c.backendIndices[backend.ID] = c.consulIndex
 	}
 
@@ -266,32 +259,34 @@ func (c *consulUpstreams) sync() error {
 	// throughout the sync process.
 	removedUpstreams := make([]gatekeeper.UpstreamID, 0, 0)
 	removedBackends := make([]gatekeeper.BackendID, 0, 0)
+
 	// defer this function so its called last, once the readlock has been surrendered
 	defer func() {
 		c.Lock()
 		defer c.Unlock()
 
 		for _, upstreamID := range removedUpstreams {
-			delete(c.upstreams, upstreamID)
 			delete(c.upstreamIndices, upstreamID)
+			if err := c.manager.RemoveUpstream(upstreamID); err != nil {
+				log.Println(err)
+			}
 		}
 
 		for _, backendID := range removedBackends {
-			delete(c.backends, backendID)
 			delete(c.backendIndices, backendID)
+			if err := c.manager.RemoveBackend(backendID); err != nil {
+				log.Println(err)
+			}
 		}
 	}()
 
 	c.RLock()
 	defer c.RUnlock()
 
-	for upstreamID, upstream := range c.upstreams {
-		index, ok := c.upstreamIndices[upstreamID]
+	for _, upstream := range c.manager.FetchAllUpstreams() {
+		index, ok := c.upstreamIndices[upstream.ID]
 		if !ok || index < c.consulIndex {
-			if err := c.manager.RemoveUpstream(upstreamID); err != nil {
-				log.Println(err)
-			}
-			removedUpstreams = append(removedUpstreams, upstreamID)
+			removedUpstreams = append(removedUpstreams, upstream.ID)
 			continue
 		}
 
@@ -300,14 +295,11 @@ func (c *consulUpstreams) sync() error {
 		}
 	}
 
-	for backendID, backend := range c.backends {
-		index, ok := c.backendIndices[backendID]
+	for _, backend := range c.manager.FetchAllBackends() {
+		index, ok := c.backendIndices[backend.ID]
 		// remove the backend if its no longer available or in a weird state
 		if !ok || index < c.consulIndex {
-			if err := c.manager.RemoveBackend(backendID); err != nil {
-				log.Println(err)
-			}
-			removedBackends = append(removedBackends, backendID)
+			removedBackends = append(removedBackends, backend.ID)
 			continue
 		}
 
