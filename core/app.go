@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
@@ -228,7 +229,10 @@ func (a *App) Stop(duration time.Duration) error {
 
 	// stop servers
 	if err := CallWith(startStoppersToInterfaces(a.servers), func(i interface{}) error {
-		return i.(startStopper).Stop(duration)
+		if err := i.(startStopper).Stop(duration); err != nil {
+			log.Println(err)
+		}
+		return nil
 	}); err != nil {
 		errs.Add(err)
 	}
@@ -236,7 +240,10 @@ func (a *App) Stop(duration time.Duration) error {
 	// stop all plugins, but the metric writer ...
 	for _, pluginType := range []PluginType{UpstreamPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin} {
 		if err := CallWith(pluginManagersToInterfaces(a.plugins[pluginType]), func(i interface{}) error {
-			return i.(startStopper).Stop(duration)
+			if err := i.(startStopper).Stop(duration); err != nil {
+				log.Println(err)
+			}
+			return nil
 		}); err != nil {
 			errs.Add(err)
 		}
@@ -249,7 +256,10 @@ func (a *App) Stop(duration time.Duration) error {
 
 	// stop the metricWriter plugins
 	if err := CallWith(pluginManagersToInterfaces(a.plugins[MetricPlugin]), func(i interface{}) error {
-		return i.(startStopper).Stop(duration)
+		if err := i.(startStopper).Stop(duration); err != nil {
+			log.Println(err)
+		}
+		return nil
 	}); err != nil {
 		errs.Add(err)
 	}

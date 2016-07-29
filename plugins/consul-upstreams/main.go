@@ -43,6 +43,7 @@ func (c *consulUpstreams) Start() error {
 	log.Println("consul-upstreams plugin started ...")
 
 	client, err := consul.NewClient(c.consulConfig)
+	log.Println(client, err)
 	if err != nil {
 		return err
 	}
@@ -318,11 +319,16 @@ func (c *consulUpstreams) worker() {
 		case <-c.stopCh:
 			break
 		default:
+			log.Println("syncing...")
 			if err := c.fetchServices(); err != nil {
 				log.Println(err)
+				time.Sleep(time.Second)
+				continue
 			}
 			if err := c.sync(); err != nil {
 				log.Println(err)
+				time.Sleep(time.Second)
+				continue
 			}
 		}
 	}

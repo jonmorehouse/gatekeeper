@@ -8,6 +8,7 @@ import "sync"
 type BackendContainer interface {
 	AddBackend(UpstreamID, *Backend) error
 	RemoveBackend(BackendID) error
+	RemoveAllBackends() error
 
 	FetchUpstreamID(BackendID) (UpstreamID, error)
 	FetchBackends(UpstreamID) ([]*Backend, error)
@@ -54,6 +55,18 @@ func (b *backendContainer) RemoveBackend(bID BackendID) error {
 
 	delete(b.backendUpstreams, bID)
 	return nil
+}
+
+func (b *backendContainer) RemoveAllBackends() error {
+	var err error
+
+	for _, backend := range b.FetchAllBackends() {
+		if e := b.RemoveBackend(backend.ID); e != nil {
+			err = e
+		}
+	}
+
+	return err
 }
 
 func (b *backendContainer) FetchUpstreamID(bID BackendID) (UpstreamID, error) {

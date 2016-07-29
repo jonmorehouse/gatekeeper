@@ -5,6 +5,7 @@ import "sync"
 type UpstreamContainer interface {
 	AddUpstream(*Upstream) error
 	RemoveUpstream(UpstreamID) error
+	RemoveAllUpstreams() error
 
 	// query methods
 	UpstreamByHostname(string) (*Upstream, error)
@@ -38,6 +39,17 @@ func (u *upstreamContainer) RemoveUpstream(uID UpstreamID) error {
 	defer u.Unlock()
 	delete(u.upstreams, uID)
 	return nil
+}
+
+func (u *upstreamContainer) RemoveAllUpstreams() error {
+	var err error
+
+	for _, upstream := range u.FetchAllUpstreams() {
+		if e := u.RemoveUpstream(upstream.ID); e != nil {
+			err = e
+		}
+	}
+	return err
 }
 
 func (u *upstreamContainer) UpstreamByHostname(hostname string) (*Upstream, error) {

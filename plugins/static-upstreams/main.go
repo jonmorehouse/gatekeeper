@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -44,25 +46,21 @@ func (e Error) Error() string {
 // upstreamConfig represents an individual upstream configuration in a yaml
 // file. Specifically, this exposes
 type UpstreamConfig struct {
-	Name        string        `yaml:"name"`
-	Timeout     time.Duration `yaml:"timeout"`
-	Protocols   []string      `yaml:"protocols"`
-	Prefixes    []string      `yaml:"prefixes"`
-	Hostnames   []string      `yaml:"hostnames"`
-	Backends    []string      `yaml:"backends"`
-	Healthcheck string        `yaml:"healthcheck"`
+	ID        string                 `yaml:"id"`
+	Name      string                 `yaml:"name"`
+	Timeout   time.Duration          `yaml:"timeout"`
+	Protocols []string               `yaml:"protocols"`
+	Prefixes  []string               `yaml:"prefixes"`
+	Hostnames []string               `yaml:"hostnames"`
+	Extra     map[string]interface{} `yaml:"extra"`
+	Backends  []string               `yaml:"backends"`
 }
 
 type Config map[string]UpstreamConfig
 
 type staticUpstreams struct {
-	manager upstream_plugin.Manager
-	data    []*upstreamAndBackends
-}
-
-type upstreamAndBackends struct {
-	upstream *gatekeeper.Upstream
-	backends []*gatekeeper.Backend
+	config  Config
+	manager gatekeeper.ServiceContainer
 }
 
 func (s *staticUpstreams) Configure(args map[string]interface{}) error {
@@ -85,43 +83,7 @@ func (s *staticUpstreams) Configure(args map[string]interface{}) error {
 		return EmptyConfigError
 	}
 
-	// store each upstream and its backends locally
-	for _, item := range config {
-		protocols, err := gatekeeper.NewProtocols(item.Protocols)
-		if err != nil {
-			return err
-		}
-		if item.Name == "" {
-			return UpstreamNameRequiredError
-		}
-
-		// build out upstream object
-		upstream := &gatekeeper.Upstream{
-			ID:        gatekeeper.NewUpstreamID(),
-			Name:      item.Name,
-			Timeout:   item.Timeout,
-			Prefixes:  item.Prefixes,
-			Hostnames: item.Hostnames,
-			Protocols: protocols,
-		}
-
-		// build out backends
-		backends := make([]*gatekeeper.Backend, len(item.Backends))
-		for idx, address := range item.Backends {
-			backends[idx] = &gatekeeper.Backend{
-				ID:          gatekeeper.NewBackendID(),
-				Address:     address,
-				Healthcheck: item.Healthcheck,
-			}
-		}
-
-		// store all backend/upstream combinations
-		s.data = append(s.data, &upstreamAndBackends{
-			upstream: upstream,
-			backends: backends,
-		})
-	}
-
+	s.config = config
 	return nil
 }
 
@@ -135,19 +97,8 @@ func (s *staticUpstreams) Start() error {
 		return NoManagerErr
 	}
 
-	// emit each upstream and its backends to the parent process
-	for _, item := range s.data {
-		log.Println("adding upstream ...")
-		if err := s.manager.AddUpstream(item.upstream); err != nil {
-			return err
-		}
-
-		log.Println("adding backend ...")
-		for _, backend := range item.backends {
-			if err := s.manager.AddBackend(item.upstream.ID, backend); err != nil {
-				return err
-			}
-		}
+	if err := s.sync(); err != nil {
+		return err
 	}
 
 	return nil
@@ -156,31 +107,24 @@ func (s *staticUpstreams) Start() error {
 func (s *staticUpstreams) Stop() error {
 	var err error
 
-	// make a best effort to remove each upstream and its backends. If any
-	// errors occur, save the error and continue
-	for _, item := range s.data {
-		if currentErr := s.manager.RemoveUpstream(item.upstream.ID); currentErr != nil {
-			err = currentErr
-		}
-
-		for _, backend := range item.backends {
-			if currentErr := s.manager.RemoveBackend(backend.ID); currentErr != nil {
-				err = currentErr
-			}
-		}
+	if e := s.manager.RemoveAllUpstreams(); e != nil {
+		err = e
 	}
 
+	if e := s.manager.RemoveAllBackends(); e != nil {
+		err = e
+	}
 	return err
 }
 
 func (s *staticUpstreams) SetManager(manager upstream_plugin.Manager) error {
-	s.manager = manager
+	s.manager = gatekeeper.NewSyncedServiceContainer(manager)
 	return nil
 }
 
 func (s *staticUpstreams) UpstreamMetric(metric *gatekeeper.UpstreamMetric) error { return nil }
 
-// loads and parses a configFile, returning a `MultiUpstreams` dictionary or an error
+// loads and parses a configFile, returning a `Config` dictionary or an error
 func (s *staticUpstreams) parseConfig(rawPath string) (Config, error) {
 	// expand the homedirectory, if one is present in the given path
 	expandedPath, err := homedir.Expand(rawPath)
@@ -206,6 +150,53 @@ func (s *staticUpstreams) parseConfig(rawPath string) (Config, error) {
 	}
 
 	return config, nil
+}
+
+func (s *staticUpstreams) sync() error {
+	for name, config := range s.config {
+		rawID := config.ID
+		if rawID == "" {
+			rawID = fmt.Sprintf("static-upstreams:%s", name)
+		}
+		id := gatekeeper.UpstreamID(rawID)
+
+		protocols, err := gatekeeper.NewProtocols(config.Protocols)
+		if err != nil {
+			return err
+		}
+
+		upstream := &gatekeeper.Upstream{
+			ID:        id,
+			Name:      name,
+			Timeout:   config.Timeout,
+			Protocols: protocols,
+			Hostnames: config.Hostnames,
+			Prefixes:  config.Prefixes,
+			Extra:     config.Extra,
+		}
+
+		if err := s.manager.AddUpstream(upstream); err != nil {
+			return err
+		}
+
+		for idx, address := range config.Backends {
+			if _, err := url.Parse(address); err != nil {
+				return err
+			}
+
+			backend := &gatekeeper.Backend{
+				ID:      gatekeeper.BackendID(fmt.Sprintf("%s:backend:%d", id, idx)),
+				Address: address,
+				Extra:   config.Extra,
+			}
+
+			if err := s.manager.AddBackend(id, backend); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func main() {

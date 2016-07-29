@@ -79,6 +79,8 @@ type pluginManager struct {
 	doneCh chan struct{}
 
 	sync.RWMutex
+
+	baseStartStopper
 	HookManager
 }
 
@@ -90,39 +92,44 @@ func (p *pluginManager) Build() error {
 }
 
 func (p *pluginManager) Start() error {
-	if err := p.startInstance(); err != nil {
-		return err
-	}
-	p.HookManager.AddHook(p.heartbeatInterval, p.heartbeat)
-	return p.HookManager.Start()
+	return p.syncStart(func() error {
+		if err := p.startInstance(); err != nil {
+			return err
+		}
+		p.HookManager.AddHook(p.heartbeatInterval, p.heartbeat)
+		return p.HookManager.Start()
+	})
 }
 
 func (p *pluginManager) Stop(dur time.Duration) error {
-	errs := NewMultiError()
-	if err := p.HookManager.Stop(dur); err != nil {
-		errs.Add(err)
-	}
-
-	// stop and kill the plugin and its connection
-	if err := p.CallOnce("Stop", func(plugin Plugin) error {
-		if plugin != nil {
-			return plugin.Stop()
+	return p.syncStop(func() error {
+		errs := NewMultiError()
+		if err := p.HookManager.Stop(dur); err != nil {
+			errs.Add(err)
 		}
-		return nil
-	}); err != nil {
-		errs.Add(err)
-	}
 
-	if err := p.CallOnce("Kill", func(plugin Plugin) error {
-		if plugin != nil {
-			plugin.Kill()
+		// stop and kill the plugin and its connection
+		if err := p.CallOnce("Stop", func(plugin Plugin) error {
+			if plugin != nil {
+				return plugin.Stop()
+			}
+			return nil
+		}); err != nil {
+			errs.Add(err)
 		}
-		return nil
-	}); err != nil {
-		errs.Add(err)
-	}
 
-	return errs.ToErr()
+		if err := p.CallOnce("Kill", func(plugin Plugin) error {
+			if plugin != nil {
+				plugin.Kill()
+			}
+			return nil
+		}); err != nil {
+			errs.Add(err)
+		}
+
+		return errs.ToErr()
+
+	})
 }
 
 func (p *pluginManager) Grab(cb func(Plugin)) {

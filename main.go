@@ -29,10 +29,10 @@ func parseFlags(options *core.Options) error {
 	commandLine := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 
 	// plugin configuration
-	useLocalLoadBalancer := commandLine.Bool("local-loadbalancer", false, "use the provided in process load balancer. default: false")
+	useLocalLoadBalancer := commandLine.Bool("local-loadbalancer", true, "use the provided in process load balancer. default: false")
 	loadBalancerPlugin := commandLine.String("loadbalancer-plugin", "simple-loadbalancer", "loadbalancer-plugin cmd. default: simple-loadbalancer")
 
-	useLocalRouter := commandLine.Bool("local-router", false, "use the provided in process router. default: false")
+	useLocalRouter := commandLine.Bool("local-router", true, "use the provided in process router. default: false")
 	routerPlugin := commandLine.String("router-plugin", "example-router", "router-plugin cmd. default: example-router")
 
 	// accept comma delimited lists of plugins for metric, upstream and modifier plugins
@@ -195,23 +195,29 @@ func main() {
 		log.Fatal(err)
 	}
 
-	stopCh := make(chan struct{})
-	go func() {
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	stopCh := make(chan struct{}, 1)
 
-		<-signals
+	stop := func() {
 		// by default, we give 10 seconds for the app to shut down gracefully
 		if err := app.Stop(time.Second * 10); err != nil {
 			log.Fatal(err)
 		}
-		stopCh <- struct{}{}
+		close(stopCh)
+	}
+
+	go func() {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		<-signals
+		stop()
 	}()
 
 	// Start and run the application. This blocks
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
+		stop()
 	}
+
 	// wait for the application to finish shutting down
 	<-stopCh
 }
