@@ -9,6 +9,7 @@ type BackendContainer interface {
 	AddBackend(UpstreamID, *Backend) error
 	RemoveBackend(BackendID) error
 	RemoveAllBackends() error
+	BackendByID(BackendID) (*Backend, error)
 
 	FetchUpstreamID(BackendID) (UpstreamID, error)
 	FetchBackends(UpstreamID) ([]*Backend, error)
@@ -16,7 +17,11 @@ type BackendContainer interface {
 }
 
 func NewBackendContainer() BackendContainer {
-	return &backendContainer{}
+	return &backendContainer{
+		backends:         make(map[BackendID]*Backend),
+		backendUpstreams: make(map[BackendID]UpstreamID),
+		upstreamBackends: make(map[UpstreamID]map[BackendID]struct{}),
+	}
 }
 
 type backendContainer struct {
@@ -35,13 +40,17 @@ func (b *backendContainer) AddBackend(uID UpstreamID, backend *Backend) error {
 	b.backendUpstreams[backend.ID] = uID
 
 	if _, ok := b.upstreamBackends[uID]; !ok {
-		b.upstreamBackends = make(map[UpstreamID]map[BackendID]struct{})
+		b.upstreamBackends[uID] = make(map[BackendID]struct{})
 	}
 	b.upstreamBackends[uID][backend.ID] = struct{}{}
 	return nil
 }
 
 func (b *backendContainer) RemoveBackend(bID BackendID) error {
+	if _, err := b.BackendByID(bID); err != nil {
+		return err
+	}
+
 	b.Lock()
 	defer b.Unlock()
 
@@ -67,6 +76,16 @@ func (b *backendContainer) RemoveAllBackends() error {
 	}
 
 	return err
+}
+
+func (b *backendContainer) BackendByID(bID BackendID) (*Backend, error) {
+	b.RLock()
+	defer b.RUnlock()
+	backend, ok := b.backends[bID]
+	if !ok {
+		return nil, BackendNotFoundErr
+	}
+	return backend, nil
 }
 
 func (b *backendContainer) FetchUpstreamID(bID BackendID) (UpstreamID, error) {

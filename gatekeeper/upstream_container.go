@@ -11,6 +11,7 @@ type UpstreamContainer interface {
 	UpstreamByHostname(string) (*Upstream, error)
 	UpstreamByPrefix(string) (*Upstream, error)
 	UpstreamByName(string) (*Upstream, error)
+	UpstreamByID(UpstreamID) (*Upstream, error)
 
 	FetchAllUpstreams() []*Upstream
 }
@@ -35,6 +36,11 @@ func (u *upstreamContainer) AddUpstream(upstream *Upstream) error {
 }
 
 func (u *upstreamContainer) RemoveUpstream(uID UpstreamID) error {
+	_, err := u.UpstreamByID(uID)
+	if err != nil {
+		return err
+	}
+
 	u.Lock()
 	defer u.Unlock()
 	delete(u.upstreams, uID)
@@ -50,6 +56,18 @@ func (u *upstreamContainer) RemoveAllUpstreams() error {
 		}
 	}
 	return err
+}
+
+func (u *upstreamContainer) UpstreamByID(id UpstreamID) (*Upstream, error) {
+	u.RLock()
+	defer u.RUnlock()
+
+	upstream, ok := u.upstreams[id]
+	if !ok {
+		return nil, UpstreamNotFoundErr
+	}
+
+	return upstream, nil
 }
 
 func (u *upstreamContainer) UpstreamByHostname(hostname string) (*Upstream, error) {
