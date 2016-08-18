@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper/test"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper/utils"
 )
 
 func fixtureUpstream() *gatekeeper.Upstream {
@@ -37,12 +39,12 @@ func fixtureBackend() *gatekeeper.Backend {
 }
 
 // newTestServiceContainer returns a service container with upstreams and backends declared
-func newTestServiceContainer(t *testing.T) gatekeeper.ServiceContainer {
-	container := gatekeeper.NewServiceContainer()
+func newTestServiceContainer(t *testing.T) utils.ServiceContainer {
+	container := utils.NewServiceContainer()
 
 	// add an upstream and a backend for said upstream
-	assertNil(t, container.AddUpstream(fixtureUpstream()))
-	assertNil(t, container.AddBackend("test", fixtureBackend()))
+	test.AssertNil(t, container.AddUpstream(fixtureUpstream()))
+	test.AssertNil(t, container.AddBackend("test", fixtureBackend()))
 	return container
 }
 
@@ -56,7 +58,7 @@ func apiTest(t *testing.T, method, target string, val interface{}, cb func(*http
 	var body io.Reader
 	if val != nil {
 		jsonBytes, err := json.Marshal(val)
-		assertNil(t, err)
+		test.AssertNil(t, err)
 		body = bytes.NewBuffer(jsonBytes)
 	}
 
@@ -82,7 +84,7 @@ func Test__errorStatusCode__OK(t *testing.T) {
 
 	for _, testCase := range testCases {
 		code := errorStatusCode(testCase.err)
-		assertEqual(t, code, testCase.code)
+		test.AssertEqual(t, code, testCase.code)
 	}
 }
 
@@ -101,15 +103,15 @@ func Test__writeJSONErrorResponse(t *testing.T) {
 		rr := httptest.NewRecorder()
 		writeJSONErrorResponse(rr, testCase.err)
 
-		assertEqual(t, rr.Code, testCase.code)
-		assertJSONBuffer(t, rr.Body, testCase.resp)
+		test.AssertEqual(t, rr.Code, testCase.code)
+		test.AssertJSONBuffer(t, rr.Body, testCase.resp)
 	}
 }
 
 func Test__fetchUpstreamsHandler(t *testing.T) {
 	apiTest(t, "GET", "/upstreams", nil, func(rr *httptest.ResponseRecorder, _ *api) {
-		assertEqual(t, rr.Code, 200)
-		assertJSONBuffer(t, rr.Body, []*upstream{&upstream{
+		test.AssertEqual(t, rr.Code, 200)
+		test.AssertJSONBuffer(t, rr.Body, []*upstream{&upstream{
 			ID:        "test",
 			Name:      "test",
 			Protocols: []string{"http-public"},
@@ -146,52 +148,52 @@ func Test__addUpstreamHandler(t *testing.T) {
 	}
 
 	apiTest(t, "POST", "/upstreams", upstream, func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 201)
-		assertJSONBuffer(t, rr.Body, "OK")
+		test.AssertEqual(t, rr.Code, 201)
+		test.AssertJSONBuffer(t, rr.Body, "OK")
 
 		fetched, err := api.serviceContainer.UpstreamByID("test-a")
-		assertNil(t, err)
-		assertNotNil(t, fetched)
-		assertEqual(t, fetched.Name, upstream.Name)
-		assertEqual(t, fetched.Protocols[0].String(), upstream.Protocols[0])
-		assertEqual(t, fetched.Hostnames[0], upstream.Hostnames[0])
-		assertEqual(t, fetched.Prefixes[0], upstream.Prefixes[0])
-		assertEqual(t, fetched.Extra["test"], upstream.Extra["test"])
+		test.AssertNil(t, err)
+		test.AssertNotNil(t, fetched)
+		test.AssertEqual(t, fetched.Name, upstream.Name)
+		test.AssertEqual(t, fetched.Protocols[0].String(), upstream.Protocols[0])
+		test.AssertEqual(t, fetched.Hostnames[0], upstream.Hostnames[0])
+		test.AssertEqual(t, fetched.Prefixes[0], upstream.Prefixes[0])
+		test.AssertEqual(t, fetched.Extra["test"], upstream.Extra["test"])
 	})
 }
 
 func Test__addUpstreamHandler__InvalidParams(t *testing.T) {
 	apiTest(t, "POST", "/upstreams", nil, func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 400)
-		assertJSONBuffer(t, rr.Body, errorResponse{Msg: "INVALID_UPSTREAM_PARAMS"})
+		test.AssertEqual(t, rr.Code, 400)
+		test.AssertJSONBuffer(t, rr.Body, errorResponse{Msg: "INVALID_UPSTREAM_PARAMS"})
 	})
 }
 
 func Test__removeUpstreamHandler(t *testing.T) {
 	apiTest(t, "DELETE", "/upstreams/test", nil, func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 204)
-		assertJSONBuffer(t, rr.Body, "DELETED")
+		test.AssertEqual(t, rr.Code, 204)
+		test.AssertJSONBuffer(t, rr.Body, "DELETED")
 
 		fetched, err := api.serviceContainer.UpstreamByID("test")
-		assertNotNil(t, err)
-		assertEqual(t, true, fetched == nil)
+		test.AssertNotNil(t, err)
+		test.AssertEqual(t, true, fetched == nil)
 	})
 }
 
 func Test__removeUpstreamHandler__UpstreamNotFound(t *testing.T) {
 	apiTest(t, "DELETE", "/upstreams/not_found", nil, func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 404)
-		assertJSONBuffer(t, rr.Body, errorResponse{Msg: "UPSTREAM_NOT_FOUND"})
+		test.AssertEqual(t, rr.Code, 404)
+		test.AssertJSONBuffer(t, rr.Body, errorResponse{Msg: "UPSTREAM_NOT_FOUND"})
 	})
 }
 
 func Test__fetchUpstreamHandler(t *testing.T) {
 	apiTest(t, "GET", "/upstreams/test", nil, func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 200)
+		test.AssertEqual(t, rr.Code, 200)
 
 		expectedResp := toUpstream(fixtureUpstream())
 		expectedResp.Backends = []*backend{toBackend(fixtureBackend())}
-		assertJSONBuffer(t, rr.Body, expectedResp)
+		test.AssertJSONBuffer(t, rr.Body, expectedResp)
 	})
 }
 
@@ -200,31 +202,31 @@ func Test__addBackendHandler(t *testing.T) {
 	backend.ID = "test2"
 
 	apiTest(t, "POST", "/upstreams/test/backend", toBackend(backend), func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 201)
-		assertJSONBuffer(t, rr.Body, "OK")
+		test.AssertEqual(t, rr.Code, 201)
+		test.AssertJSONBuffer(t, rr.Body, "OK")
 
 		backends, err := api.serviceContainer.FetchBackends("test")
-		assertNil(t, err)
-		assertEqual(t, 2, len(backends))
+		test.AssertNil(t, err)
+		test.AssertEqual(t, 2, len(backends))
 	})
 }
 
 func Test__addBackendHandler__InvalidBackendParams(t *testing.T) {
 	apiTest(t, "POST", "/upstreams/test/backend", "invalid", func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 400)
-		assertJSONBuffer(t, rr.Body, errorResponse{Msg: "INVALID_BACKEND_PARAMS"})
+		test.AssertEqual(t, rr.Code, 400)
+		test.AssertJSONBuffer(t, rr.Body, errorResponse{Msg: "INVALID_BACKEND_PARAMS"})
 	})
 }
 
 func Test__removeBackendHandler(t *testing.T) {
 	apiTest(t, "DELETE", "/upstreams/test/backend/test", nil, func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 204)
-		assertJSONBuffer(t, rr.Body, "DELETED")
+		test.AssertEqual(t, rr.Code, 204)
+		test.AssertJSONBuffer(t, rr.Body, "DELETED")
 	})
 }
 
 func Test__removeBackendHandler__BackendNotFound(t *testing.T) {
 	apiTest(t, "DELETE", "/upstreams/test/backend/invalid", nil, func(rr *httptest.ResponseRecorder, api *api) {
-		assertEqual(t, rr.Code, 404)
+		test.AssertEqual(t, rr.Code, 404)
 	})
 }

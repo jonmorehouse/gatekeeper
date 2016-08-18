@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper/utils"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -201,14 +202,14 @@ type backend struct {
 	Extra   map[string]interface{} `json:"extra"`
 }
 
-func NewAPI(serviceContainer gatekeeper.ServiceContainer) Service {
+func NewAPI(serviceContainer utils.ServiceContainer) utils.Service {
 	return &api{
 		serviceContainer: serviceContainer,
 	}
 }
 
 type api struct {
-	serviceContainer gatekeeper.ServiceContainer
+	serviceContainer utils.ServiceContainer
 }
 
 // Router returns an http.Handler that can handle all traffic; routing it to the proper handlers
