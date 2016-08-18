@@ -71,7 +71,11 @@ func AssertEqual(t *testing.T, a, b interface{}) {
 }
 
 func AssertJSON(t *testing.T, buf []byte, value interface{}) {
-	byt, err := json.Marshal(buf)
+	byt, err := json.Marshal(value)
 	AssertNil(t, err)
 	AssertEqual(t, strings.TrimSpace(bytes.NewBuffer(buf).String()), string(byt))
+}
+
+func AssertJSONBuffer(t *testing.T, buf *bytes.Buffer, value interface{}) {
+	AssertJSON(t, buf.Bytes(), value)
 }

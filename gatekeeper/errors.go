@@ -8,7 +8,9 @@ var (
 	BackendNotFoundErr  = errors.New("backend not found")
 )
 
-// UpstreamPlugin errors
+// Plugin specific errors
 var (
-	NoManagerErr = errors.New("no upstream_plugin.Manager available")
+	NoManagerErr  = errors.New("no upstream_plugin.Manager available")
+	NotStartedErr = errors.New("not started error")
+	NoConfigErr   = errors.New("No config error")
 )
