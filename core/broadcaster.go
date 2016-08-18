@@ -1,7 +1,6 @@
 package core
 
 import (
-	"log"
 	"sync"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
@@ -72,7 +71,6 @@ type broadcaster struct {
 }
 
 func (b *broadcaster) AddListener(ch EventCh, events []gatekeeper.Event) ListenerID {
-	log.Println("listener added ...")
 	listenerID := ListenerID(gatekeeper.GetUUID())
 
 	b.Lock()

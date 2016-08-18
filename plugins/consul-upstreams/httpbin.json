@@ -1,0 +1,27 @@
+{
+	"services": [
+		{
+			"name": "httpbin",
+			"id": "httpbin-live",
+			"tags": ["master"],
+			"address": "https://httpbin.org",
+			"enableTagOverride": false
+		},
+		{
+			"name": "httpbin",
+			"id": "httpbin-local",
+			"tags": ["local"],
+			"address": "http://10.51.50.91:8000",
+			"enableTagOverride": false,
+			"checks": [
+				{
+					"id": "httpbin-local",
+					"name": "httpbin-local check",
+					"http": "http://10.51.50.91:8000/get",
+					"interval": "10s",
+					"timeout": "1s"
+				}
+			]
+		}	
+	]
+}

@@ -13,7 +13,6 @@ import (
 
 type Server interface {
 	Start() error
-	StopAccepting() error
 	Stop(time.Duration) error
 }
 
@@ -90,25 +89,25 @@ type server struct {
 
 	httpServer *graceful.Server
 
+	baseStartStopper
 	sync.Mutex
 }
 
 func (s *server) Start() error {
-	// start the metric worker for tracking current requests
-	s.eventMetric(gatekeeper.ServerStartedEvent)
-	return s.startHTTP()
-}
-
-func (s *server) StopAccepting() error {
-	s.stopAccepting = true
-	return nil
+	return s.syncStart(func() error {
+		// start the metric worker for tracking current requests
+		s.eventMetric(gatekeeper.ServerStartedEvent)
+		return s.startHTTP()
+	})
 }
 
 func (s *server) Stop(duration time.Duration) error {
-	s.eventMetric(gatekeeper.ServerStoppedEvent)
-	s.httpServer.Stop(duration)
-	s.stopCh <- struct{}{}
-	return <-s.errCh
+	return s.syncStop(func() error {
+		s.eventMetric(gatekeeper.ServerStoppedEvent)
+		s.httpServer.Stop(duration)
+		s.stopCh <- struct{}{}
+		return <-s.errCh
+	})
 }
 
 func (s *server) startHTTP() error {

@@ -14,7 +14,7 @@ func NewBackendID() BackendID {
 }
 
 type Backend struct {
-	ID          BackendID
-	Address     string
-	Healthcheck string
+	ID      BackendID
+	Address string
+	Extra   map[string]interface{}
 }

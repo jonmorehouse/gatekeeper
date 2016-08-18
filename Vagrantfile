@@ -11,6 +11,12 @@ Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/trusty64"
   config.vm.synced_folder ".", "/gatekeeper"
 
+  config.vm.provider 'virtualbox' do |v|
+    v.name = 'gatekeeper'
+    v.memory = 1024
+    v.cpus = 2
+  end
+
   # configure an IP address for easier ssh access, unless explicitly disabled
   if ENV["GATEKEEPER_NO_IP"].nil?
     ip = ENV["GATEKEEPER_PRIVATE_NETWORK_IP"] || "10.51.50.91"
@@ -48,7 +54,15 @@ Vagrant.configure("2") do |config|
 
       if [[ ! -d /gopath ]];then
         mkdir -p /gopath 
+        mkdir -p /gopath/bin
+        mkdir -p /gopath/src
       fi
+
+      # update some base configuration needed
+      echo -e "export GOPATH=/gopath" >> ~/.bash_profile
+      echo -e "export GOPATH=/gopath" >> ~vagrant/.bash_profile
+      echo -e "export PATH=$PATH:/gopath/bin" >> ~/.bash_profile
+      echo -e "export PATH=$PATH:/gopath/bin" >> ~vagrant/.bash_profile
 
       which docker 2>&1 > /dev/null
       if [[ $? -ne 0 ]];then

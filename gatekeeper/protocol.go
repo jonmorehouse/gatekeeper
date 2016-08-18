@@ -29,6 +29,31 @@ func (p Protocol) String() string {
 	return str
 }
 
+func ParseProtocol(value string) (Protocol, error) {
+	for protocol, str := range formattedProtocols {
+		if str == value {
+			return protocol, nil
+		}
+	}
+
+	return Protocol(0), fmt.Errorf("unknown protocol")
+}
+
+func ParseProtocols(values []string) ([]Protocol, error) {
+	protocols := make([]Protocol, len(values))
+	for idx, value := range values {
+		protocol, err := ParseProtocol(value)
+		if err != nil {
+			return []Protocol(nil), err
+		}
+		protocols[idx] = protocol
+
+	}
+
+	return protocols, nil
+}
+
+// TODO: remove this method
 func NewProtocol(value string) (Protocol, error) {
 	for protocol, str := range formattedProtocols {
 		if str == value {
@@ -39,6 +64,7 @@ func NewProtocol(value string) (Protocol, error) {
 	return Protocol(0), fmt.Errorf("unknown protocol")
 }
 
+// TODO: remove this method
 func NewProtocols(values []string) ([]Protocol, error) {
 	protocols := make([]Protocol, len(values))
 	for idx, value := range values {
