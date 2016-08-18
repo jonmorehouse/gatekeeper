@@ -21,6 +21,10 @@ type invalidConfig struct {
 	Invalid struct{} `flag:"invalid"`
 }
 
+type requiredConfig struct {
+	Required string `flag:"required" required:"true"`
+}
+
 func TestConfig__OK(t *testing.T) {
 	var cfg validConfig
 	opts := map[string]interface{}{
@@ -98,4 +102,12 @@ func TestConfig__BoolInvalidDest(t *testing.T) {
 
 	err := ParseConfig(opts, &cfg)
 	test.AssertNotNil(t, err)
+}
+
+func TestConfig__Required(t *testing.T) {
+	var cfg requiredConfig
+	err := ParseConfig(map[string]interface{}{}, &cfg)
+	test.AssertNotNil(t, err)
+	_, ok := err.(RequiredError)
+	test.AssertTrue(t, ok)
 }

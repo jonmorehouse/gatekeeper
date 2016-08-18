@@ -14,6 +14,14 @@ var (
 	InvalidTypeErr     = errors.New("invalid type error")
 )
 
+type RequiredError struct {
+	Flag string
+}
+
+func (e RequiredError) Error() string {
+	return fmt.Sprintf("Missing required flag: %s", e.Flag)
+}
+
 // Coerce error represents a coercion error involving a parameter.
 func NewCoerceError(field string, typ string, val interface{}) CoerceError {
 	return CoerceError{
@@ -44,6 +52,9 @@ func ParseConfig(opts map[string]interface{}, config interface{}) error {
 			continue
 		}
 
+		// check to see if the flag is required or not
+		required := field.Tag.Get("required") != ""
+
 		// find the value that _should_ be coerced. If the value is in
 		// the options then that will be coerced, otherwise check if
 		// the default tag is defined. If neither an opt or a default
@@ -51,12 +62,19 @@ func ParseConfig(opts map[string]interface{}, config interface{}) error {
 		rawValue, ok := opts[flagName]
 		defaultValue := field.Tag.Get("default")
 
-		// if neither a flag or default is available continue. If no
-		// flag but a default was available set that to the value for
-		// coercion.
+		// if the value was required and not passed in, emit an error
+		if !ok && required {
+			return RequiredError{flagName}
+		}
+
+		// if the flag is not required and no default is set, simply
+		// continue with a no-op
 		if !ok && defaultValue == "" {
 			continue
-		} else if !ok {
+		}
+
+		// if the value wasn't found, use the default value
+		if !ok {
 			rawValue = defaultValue
 		}
 
