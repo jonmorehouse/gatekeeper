@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http/httptest"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -71,38 +68,6 @@ func apiTest(t *testing.T, method, target string, val interface{}, cb func(*http
 	// perform the request and pass the response along
 	api.Router().ServeHTTP(rr, req)
 	cb(rr, api)
-}
-
-// TODO: move to another file
-func assertNil(t *testing.T, val interface{}) {
-	if val != nil {
-		t.Fatalf("expected nil")
-		t.FailNow()
-	}
-}
-
-func assertNotNil(t *testing.T, val interface{}) {
-	if val == nil {
-		t.Fatalf("expected not nil")
-		t.FailNow()
-	}
-}
-
-// assert that a byte array is valid JSON and equals the passed in json type
-func assertJSONBuffer(t *testing.T, a *bytes.Buffer, b interface{}) {
-	bytes, err := json.Marshal(b)
-	assertNil(t, err)
-
-	// verify that both bytes buffers are equal
-	assertEqual(t, strings.TrimSpace(a.String()), string(bytes))
-
-}
-
-func assertEqual(t *testing.T, a, b interface{}) {
-	if !reflect.DeepEqual(a, b) {
-		t.Fatalf(fmt.Sprintf("%v != %v", a, b))
-		t.FailNow()
-	}
 }
 
 // test that an errorStatusCode is returned correctly parsing types where needed
