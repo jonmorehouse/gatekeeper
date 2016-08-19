@@ -1,10 +1,6 @@
 package core
 
-import (
-	"sync"
-
-	"github.com/jonmorehouse/gatekeeper/gatekeeper"
-)
+import "github.com/jonmorehouse/gatekeeper/gatekeeper"
 
 type EventCh chan Event
 
@@ -67,7 +63,7 @@ func NewBroadcaster() Broadcaster {
 type broadcaster struct {
 	eventListeners map[gatekeeper.Event]map[ListenerID]EventCh
 
-	sync.RWMutex
+	RWMutex
 }
 
 func (b *broadcaster) AddListener(ch EventCh, events []gatekeeper.Event) ListenerID {

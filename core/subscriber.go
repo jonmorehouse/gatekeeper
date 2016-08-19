@@ -2,13 +2,13 @@ package core
 
 import (
 	"sync"
-	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 )
 
 type Subscriber interface {
-	startStopper
+	starter
+	stopper
 
 	AddUpstreamEventHook(gatekeeper.Event, func(*UpstreamEvent)) error
 }
@@ -27,7 +27,7 @@ type subscriber struct {
 	doneCh chan error
 	stopCh chan struct{}
 
-	sync.RWMutex
+	RWMutex
 }
 
 func (s *subscriber) Start() error {
@@ -35,7 +35,7 @@ func (s *subscriber) Start() error {
 	return nil
 }
 
-func (s *subscriber) Stop(time.Duration) error {
+func (s *subscriber) Stop() error {
 	s.stopCh <- struct{}{}
 	return <-s.doneCh
 }

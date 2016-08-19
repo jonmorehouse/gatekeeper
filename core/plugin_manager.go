@@ -4,7 +4,6 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
@@ -78,9 +77,9 @@ type pluginManager struct {
 	stopCh chan struct{}
 	doneCh chan struct{}
 
-	sync.RWMutex
+	RWMutex
 
-	baseStartStopper
+	SyncStartStopper
 	HookManager
 }
 
@@ -92,7 +91,7 @@ func (p *pluginManager) Build() error {
 }
 
 func (p *pluginManager) Start() error {
-	return p.syncStart(func() error {
+	return p.SyncStart(func() error {
 		if err := p.startInstance(); err != nil {
 			return err
 		}
@@ -102,7 +101,7 @@ func (p *pluginManager) Start() error {
 }
 
 func (p *pluginManager) Stop(dur time.Duration) error {
-	return p.syncStop(func() error {
+	return p.SyncStop(func() error {
 		errs := NewMultiError()
 		if err := p.HookManager.Stop(dur); err != nil {
 			errs.Add(err)

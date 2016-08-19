@@ -1,6 +1,9 @@
 package gatekeeper
 
-import "time"
+import (
+	"runtime"
+	"time"
+)
 
 // Metric is the general type that all metrics implement
 type Metric interface{}
@@ -50,8 +53,8 @@ type EventMetric struct {
 // internal state of the application. Specifically, this is an internal
 // mechanism for exposing pprof data to the metrics plugin.
 type ProfilingMetric struct {
-	// TODO: add in pprof internally
 	Timestamp time.Time
+	MemStats  runtime.MemStats
 }
 
 type PluginResponse uint
@@ -99,6 +102,12 @@ type RequestMetric struct {
 	InternalLatency        time.Duration // total local latency, including
 	ProxyLatency           time.Duration // total latency actually proxying the request
 	UpstreamMatcherLatency time.Duration // total latency matching the request to an upstream
+	TCPConnectLatency      time.Duration
+	DNSLookupLatency       time.Duration
+
+	// additional meta information around the request
+	DNSLookup        bool
+	ConnectionReused bool
 
 	// Plugin Latencies
 	LoadBalancerLatency          time.Duration

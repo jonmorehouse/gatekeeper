@@ -13,7 +13,8 @@ type ModifierClient interface {
 }
 
 type Modifier interface {
-	startStopper
+	starter
+	stopper
 	ModifierClient
 }
 
@@ -23,8 +24,8 @@ func NewLocalModifier() Modifier {
 
 type localModifier struct{}
 
-func (*localModifier) Start() error             { return nil }
-func (*localModifier) Stop(time.Duration) error { return nil }
+func (*localModifier) Start() error { return nil }
+func (*localModifier) Stop() error  { return nil }
 
 func (*localModifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
 	return req, nil

@@ -12,8 +12,8 @@ import (
 )
 
 type Server interface {
-	Start() error
-	Stop(time.Duration) error
+	starter
+	gracefulStopper
 }
 
 func NewHTTPServer(protocol gatekeeper.Protocol, port uint, router RouterClient, lb LoadBalancerClient, modifier ModifierClient, proxier Proxier, metricWriter MetricWriterClient) Server {
@@ -89,12 +89,12 @@ type server struct {
 
 	httpServer *graceful.Server
 
-	baseStartStopper
+	SyncStartStopper
 	sync.Mutex
 }
 
 func (s *server) Start() error {
-	return s.syncStart(func() error {
+	return s.SyncStart(func() error {
 		// start the metric worker for tracking current requests
 		s.eventMetric(gatekeeper.ServerStartedEvent)
 		return s.startHTTP()
@@ -102,7 +102,7 @@ func (s *server) Start() error {
 }
 
 func (s *server) Stop(duration time.Duration) error {
-	return s.syncStop(func() error {
+	return s.SyncStop(func() error {
 		s.eventMetric(gatekeeper.ServerStoppedEvent)
 		s.httpServer.Stop(duration)
 		s.stopCh <- struct{}{}

@@ -46,39 +46,12 @@ func CallWithTimeout(dur time.Duration, f func() error) (error, bool) {
 	return err, true
 }
 
-func serversToInterfaces(items []Server) []interface{} {
-	if items == nil {
-		return []interface{}(nil)
-	}
-
-	output := make([]interface{}, len(items))
-	for idx, item := range items {
-		output[idx] = item
-	}
-
-	return output
-}
-
 func pluginManagersToInterfaces(items []PluginManager) []interface{} {
 	if items == nil {
 		return []interface{}(nil)
 	}
 
 	output := make([]interface{}, len(items))
-	for idx, item := range items {
-		output[idx] = item
-	}
-
-	return output
-}
-
-func startStoppersToInterfaces(items []startStopper) []interface{} {
-	if items == nil {
-		return []interface{}(nil)
-	}
-
-	output := make([]interface{}, len(items))
-
 	for idx, item := range items {
 		output[idx] = item
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 type HookManager interface {
-	startStopper
+	stopper
 	AddHook(time.Duration, func() error)
 }
 
@@ -25,11 +25,10 @@ type hook struct {
 type hookManager struct {
 	hooks []*hook
 
-	sync.RWMutex
+	RWMutex
 }
 
-func (m *hookManager) Start() error { return nil }
-func (m *hookManager) Stop(time.Duration) error {
+func (m *hookManager) Stop() error {
 	var wg sync.WaitGroup
 
 	for _, h := range m.hooks {

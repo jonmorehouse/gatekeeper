@@ -1,57 +1,57 @@
 package core
 
-import (
-	"errors"
-	"sync"
-	"time"
-)
+import "time"
 
-var AlreadyStartedErr = errors.New("already started error")
-
-// startStopper represents the base start stopping
-type startStopper interface {
+type starter interface {
 	Start() error
+}
+
+type stopper interface {
+	Stop() error
+}
+
+type gracefulStopper interface {
 	Stop(time.Duration) error
 }
 
-type baseStartStopper struct {
-	started bool
+func filterStarters(input []interface{}, cb func(starter) error) error {
+	errs := NewMultiError()
 
-	sync.RWMutex
+	for _, item := range input {
+		if i, ok := item.(starter); ok {
+			if err := cb(i); err != nil {
+				errs.Add(err)
+			}
+		}
+	}
+
+	return errs.ToErr()
 }
 
-func (b *baseStartStopper) syncStart(cb func() error) error {
-	b.RLock()
-	started := b.started
-	b.RUnlock()
+func filterStoppers(input []interface{}, cb func(stopper) error) error {
+	errs := NewMultiError()
 
-	if started {
-		return AlreadyStartedErr
+	for _, item := range input {
+		if i, ok := item.(stopper); ok {
+			if err := cb(i); err != nil {
+				errs.Add(err)
+			}
+		}
 	}
 
-	if err := cb(); err != nil {
-		return err
-	}
-
-	b.Lock()
-	defer b.Unlock()
-	b.started = true
-	return nil
+	return errs.ToErr()
 }
 
-func (b *baseStartStopper) syncStop(cb func() error) error {
-	b.RLock()
-	started := b.started
-	b.RUnlock()
+func filterGracefulStoppers(input []interface{}, cb func(gracefulStopper) error) error {
+	errs := NewMultiError()
 
-	if !started {
-		return nil
+	for _, item := range input {
+		if i, ok := item.(gracefulStopper); ok {
+			if err := gracefulStopper(i); err != nil {
+				errs.Add(err)
+			}
+		}
 	}
 
-	b.Lock()
-	defer func() {
-		b.started = false
-		b.Unlock()
-	}()
-	return cb()
+	return errs.ToErr()
 }

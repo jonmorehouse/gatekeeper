@@ -51,6 +51,9 @@ type Request struct {
 	// and will immediately result in the response being written back to the
 	// client
 	Response *Response
+
+	// Context is an additional bit of context that any particular user of the application can use
+	Context map[string]string
 }
 
 func NewRequest(req *http.Request, protocol Protocol) *Request {
