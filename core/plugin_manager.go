@@ -17,7 +17,7 @@ import (
 type PluginManager interface {
 	Build() error
 	Start() error
-	Stop(time.Duration) error
+	Stop() error
 
 	// Call a method on the plugin instance with additional robustness and
 	// metrics emitted to the metricWriter. This supports retries and
@@ -96,14 +96,14 @@ func (p *pluginManager) Start() error {
 			return err
 		}
 		p.HookManager.AddHook(p.heartbeatInterval, p.heartbeat)
-		return p.HookManager.Start()
+		return nil
 	})
 }
 
-func (p *pluginManager) Stop(dur time.Duration) error {
+func (p *pluginManager) Stop() error {
 	return p.SyncStop(func() error {
 		errs := NewMultiError()
-		if err := p.HookManager.Stop(dur); err != nil {
+		if err := p.HookManager.Stop(); err != nil {
 			errs.Add(err)
 		}
 
@@ -127,7 +127,6 @@ func (p *pluginManager) Stop(dur time.Duration) error {
 		}
 
 		return errs.ToErr()
-
 	})
 }
 

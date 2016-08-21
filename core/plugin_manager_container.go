@@ -48,7 +48,7 @@ func buildPlugins(options *Options, metricWriter MetricWriter) PluginManagerCont
 // container. It collects errors and returns the resolved multi-error.
 func asyncPluginFilter(plugins PluginManagerContainer, typs []PluginType, cb func(PluginManager) error) error {
 	if typs == nil {
-		typs = AllPluginTypes
+		typs = allPluginTypes
 	}
 
 	errs := NewMultiError()
@@ -76,7 +76,7 @@ func asyncPluginFilter(plugins PluginManagerContainer, typs []PluginType, cb fun
 
 func syncPluginFilter(plugins PluginManagerContainer, typs []PluginType, cb func(PluginManager) error) error {
 	if typs == nil {
-		typs = AllPluginTypes
+		typs = allPluginTypes
 	}
 
 	errs := NewMultiError()

@@ -47,7 +47,7 @@ func filterGracefulStoppers(input []interface{}, cb func(gracefulStopper) error)
 
 	for _, item := range input {
 		if i, ok := item.(gracefulStopper); ok {
-			if err := gracefulStopper(i); err != nil {
+			if err := cb(i); err != nil {
 				errs.Add(err)
 			}
 		}

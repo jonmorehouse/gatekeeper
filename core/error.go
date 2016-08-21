@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"errors"
+	"reflect"
 )
 
 var (
@@ -60,7 +61,7 @@ func NewMultiError() *MultiError {
 }
 
 func (m *MultiError) Add(err error) {
-	if err == nil || reflect.IsNil(err) {
+	if err == nil || reflect.ValueOf(err).IsNil() {
 		return
 	}
 

@@ -29,7 +29,7 @@ type profiler struct {
 
 func (p *profiler) Start() error {
 	p.AddHook(p.interval, p.writeMetrics)
-	return p.HookManager.Start()
+	return nil
 }
 
 // writeMetrics is called periodically by the HookManager base class and is
@@ -39,7 +39,7 @@ func (p *profiler) writeMetrics() error {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	p.metricWriter.WriteProfilingMetric(&gatekeeper.ProfilingMetric{
+	p.metricWriter.ProfilingMetric(&gatekeeper.ProfilingMetric{
 		Timestamp: time.Now(),
 		MemStats:  memStats,
 	})

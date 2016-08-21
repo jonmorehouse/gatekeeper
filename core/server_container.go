@@ -5,25 +5,25 @@ import "github.com/jonmorehouse/gatekeeper/gatekeeper"
 type ServerContainer map[gatekeeper.Protocol]Server
 
 func buildServers(options Options, router Router, loadBalancer LoadBalancer, modifier Modifier, proxier Proxier, metricWriter MetricWriter) ServerContainer {
-	servers = make(ServerContainer)
+	servers := make(ServerContainer)
 
 	pairings := [][2]interface{}{
 		[2]interface{}{gatekeeper.HTTPPublic, options.HTTPPublicPort},
 		[2]interface{}{gatekeeper.HTTPInternal, options.HTTPInternalPort},
 		[2]interface{}{gatekeeper.HTTPSPublic, options.HTTPSPublicPort},
-		[2]interface{}{gatekeeper.HTTPSInternal, options.HTTPSPublicInternal},
+		[2]interface{}{gatekeeper.HTTPSInternal, options.HTTPSInternalPort},
 	}
 
 	for _, pairing := range pairings {
 		prot := pairing[0].(gatekeeper.Protocol)
 		method := NewHTTPServer
-		if prot == HTTPSPublic || prot == HTTPSInternal {
+		if prot == gatekeeper.HTTPSPublic || prot == gatekeeper.HTTPSInternal {
 			method = NewHTTPServer
 		}
 
 		servers[prot] = method(
 			prot,
-			pairing[1].(int),
+			pairing[1].(uint),
 			router,
 			loadBalancer,
 			modifier,
@@ -35,7 +35,7 @@ func buildServers(options Options, router Router, loadBalancer LoadBalancer, mod
 	return servers
 }
 
-func filterServers(servers ServerContainer, typs []gatekeeper.Protocol, cb func(Server) error) {
+func filterServers(servers ServerContainer, typs []gatekeeper.Protocol, cb func(Server) error) error {
 	errs := NewMultiError()
 
 	if typs == nil {

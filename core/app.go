@@ -8,7 +8,7 @@ import (
 )
 
 type App struct {
-	servers         []Server
+	servers         ServerContainer
 	plugins         PluginManagerContainer
 	components      []interface{}
 	metricWriter    MetricWriter
@@ -82,14 +82,14 @@ func (a *App) Start() error {
 
 	// write out a method that will filter out starters
 	if err := filterStarters(a.components, func(i starter) error {
-		return i.start()
+		return i.Start()
 	}); err != nil {
 		return err
 	}
 
 	// start each of the plugins; handling the case of an upstream plugin particularly carefully.
 	types := []PluginType{MetricPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin, UpstreamPlugin}
-	err = syncPluginManagerFilter(a.plugins, types, func(manager PluginManager) error {
+	err := syncPluginFilter(a.plugins, types, func(manager PluginManager) error {
 		if err := manager.Build(); err != nil {
 			return err
 		}
@@ -119,8 +119,8 @@ func (a *App) Start() error {
 		return err
 	}
 
-	return filterServers(a.servers, func(i starter) error {
-		return i.start()
+	return filterServers(a.servers, nil, func(i Server) error {
+		return i.Start()
 	})
 }
 
@@ -129,27 +129,27 @@ func (a *App) Stop(duration time.Duration) error {
 	errs := NewMultiError()
 
 	// stop servers
-	errs.Add(filterServers(i.servers, func(server Server) error {
+	errs.Add(filterServers(a.servers, nil, func(server Server) error {
 		return server.Stop(duration)
 	}))
 
 	// stop the plugins, apart from the metricWriter
 	typs := []PluginType{UpstreamPlugin, RouterPlugin, LoadBalancerPlugin, ModifierPlugin}
-	errs.Add(asyncFilterPlugins(a.plugins, typs, func(pluginManager PluginManager) error {
-		return pluginManager.Stop(duration)
+	errs.Add(asyncPluginFilter(a.plugins, typs, func(pluginManager PluginManager) error {
+		return pluginManager.Stop()
 	}))
 
 	// stop all other components
-	errs.Add(filterGracefulStopper(i.components, func(i gracefulStopper) error {
+	errs.Add(filterGracefulStoppers(a.components, func(i gracefulStopper) error {
 		return i.Stop(duration)
 	}))
-	errs.Add(filterStopper(i.components, func(i stopper) error {
+	errs.Add(filterStoppers(a.components, func(i stopper) error {
 		return i.Stop()
 	}))
 
 	// stop the metricWriter plugins
-	errs.Add(asyncFilterPlugins(a.plugins, []PluginType{MetricWriter}, func(pluginManager PluginManager) error {
-		return pluginManager.Stop(duration)
+	errs.Add(asyncPluginFilter(a.plugins, []PluginType{MetricPlugin}, func(pluginManager PluginManager) error {
+		return pluginManager.Stop()
 	}))
 	return errs.ToErr()
 }
