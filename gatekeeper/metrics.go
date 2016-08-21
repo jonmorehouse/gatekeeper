@@ -76,7 +76,7 @@ type PluginMetric struct {
 	PluginName string
 	MethodName string
 
-	Err error // an error that may or may not have arisen
+	Err Error // an error that may or may not have arisen
 }
 
 // RequestMetrics provide the most granular insight into a request and are
