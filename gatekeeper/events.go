@@ -40,35 +40,35 @@ const (
 )
 
 var eventMapping = map[Event]string{
-	AppStartedEvent: "app started",
-	AppStoppedEvent: "app stopped event",
+	AppStartedEvent: "app.started",
+	AppStoppedEvent: "app.stopped",
 
-	ServerStartedEvent: "server started",
-	ServerStoppedEvent: "server stopped",
+	ServerStartedEvent: "server.started",
+	ServerStoppedEvent: "server.stopped",
 
-	RequestAcceptedEvent: "request accepted",
-	RequestSuccessEvent:  "request succeeded",
-	RequestErrorEvent:    "request error",
-	RequestFinishedEvent: "request finished",
+	RequestAcceptedEvent: "request.accepted",
+	RequestSuccessEvent:  "request.succeeded",
+	RequestErrorEvent:    "request.error",
+	RequestFinishedEvent: "request.finished",
 
-	UpstreamAddedEvent:   "upstream added",
-	UpstreamRemovedEvent: "upstream removed",
+	UpstreamAddedEvent:   "upstream.added",
+	UpstreamRemovedEvent: "upstream.removed",
 
-	BackendAddedEvent:   "backend added",
-	BackendRemovedEvent: "backend removed",
+	BackendAddedEvent:   "backend.added",
+	BackendRemovedEvent: "backend.removed",
 
-	MetricsFlushedEvent:        "metrics flushed event",
-	MetricsFlushedSuccessEvent: "flush metrics success",
-	MetricsFlushedErrorEvent:   "flush metrics error",
+	MetricsFlushedEvent:        "metrics.flush",
+	MetricsFlushedSuccessEvent: "metrics.flush_success",
+	MetricsFlushedErrorEvent:   "metrics.flush_error",
 
-	PluginStartedEvent:   "plugin started",
-	PluginRestartedEvent: "plugin restarted",
-	PluginErrorEvent:     "plugin error",
-	PluginStoppedEvent:   "plugin stopped",
-	PluginFailedEvent:    "plugin failed",
+	PluginStartedEvent:   "plugin.started",
+	PluginRestartedEvent: "plugin.restarted",
+	PluginErrorEvent:     "plugin.error",
+	PluginStoppedEvent:   "plugin.stopped",
+	PluginFailedEvent:    "plugin.failed",
 
-	PluginHeartbeatNotOkEvent: "plugin heartbeat not ok",
-	PluginHeartbeatOkEvent:    "plugin heartbeat ok",
+	PluginHeartbeatNotOkEvent: "plugin.heartbeat_failure",
+	PluginHeartbeatOkEvent:    "plugin.hearbeat",
 }
 
 func (m Event) String() string {

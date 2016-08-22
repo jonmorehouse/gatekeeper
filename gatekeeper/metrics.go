@@ -76,7 +76,7 @@ type PluginMetric struct {
 	PluginName string
 	MethodName string
 
-	Err Error // an error that may or may not have arisen
+	Error *Error // an error that may or may not have arisen
 }
 
 // RequestMetrics provide the most granular insight into a request and are
@@ -98,26 +98,28 @@ type RequestMetric struct {
 	RequestEndTS   time.Time
 
 	// Latencies
-	Latency                time.Duration
-	InternalLatency        time.Duration // total local latency, including
-	ProxyLatency           time.Duration // total latency actually proxying the request
-	UpstreamMatcherLatency time.Duration // total latency matching the request to an upstream
-	TCPConnectLatency      time.Duration
-	DNSLookupLatency       time.Duration
+	Latency           time.Duration
+	InternalLatency   time.Duration // total local latency, including
+	DNSLookupLatency  time.Duration
+	TCPConnectLatency time.Duration
+	ProxyLatency      time.Duration
 
-	// additional meta information around the request
-	DNSLookup        bool
-	ConnectionReused bool
+	// Connection meta inforamtion
+	DNSLookup    bool
+	ConnReused   bool
+	ConnWasIdle  bool
+	ConnIdleTime time.Duration
 
 	// Plugin Latencies
+	RouterLatency                time.Duration
 	LoadBalancerLatency          time.Duration
-	RequestModifierLatency       time.Duration
 	ResponseModifierLatency      time.Duration
+	RequestModifierLatency       time.Duration
 	ErrorResponseModifierLatency time.Duration
 
 	// Any sort of error that could have been bubbled up throughout the
 	// request path
-	Error error
+	Error *Error
 }
 
 // UpstreamMetrics are useful for garnering granular metrics on particular

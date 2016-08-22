@@ -21,7 +21,23 @@ const (
 	NilUpstreamMatch UpstreamMatchType = iota + 1
 	PrefixUpstreamMatch
 	HostnameUpstreamMatch
+	OtherUpstreamMatch
 )
+
+func (u UpstreamMatchType) String() string {
+	switch u {
+	case NilUpstreamMatch:
+		return "no_match"
+	case PrefixUpstreamMatch:
+		return "prefix_match"
+	case HostnameUpstreamMatch:
+		return "hostname_match"
+	case OtherUpstreamMatch:
+		return "other_match"
+	}
+
+	return ""
+}
 
 type Upstream struct {
 	ID        UpstreamID

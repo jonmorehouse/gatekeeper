@@ -1,17 +1,12 @@
 package main
 
 import (
-	"errors"
 	"log"
 	"sync"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
 )
-
-var NoRoutesAvailableError = errors.New("no routes available")
-var UpstreamNotFoundError = errors.New("no routes available")
-var InternalError = errors.New("internal error")
 
 // router implements the `router_plugin.Plugin` interface
 func NewRouter() router_plugin.Plugin {
@@ -67,9 +62,9 @@ func (r *router) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *g
 	defer r.RUnlock()
 
 	for _, upstream := range r.upstreams {
-		log.Println("Hi", upstream)
 		for _, hostname := range upstream.Hostnames {
 			if req.Host == hostname {
+				req.UpstreamMatchType = gatekeeper.HostnameUpstreamMatch
 				return upstream, req, nil
 			}
 		}
@@ -77,6 +72,7 @@ func (r *router) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *g
 		for _, prefix := range upstream.Hostnames {
 			if req.Prefix == prefix {
 				req.Path = req.PrefixlessPath
+				req.UpstreamMatchType = gatekeeper.PrefixUpstreamMatch
 				return upstream, req, nil
 			}
 		}
