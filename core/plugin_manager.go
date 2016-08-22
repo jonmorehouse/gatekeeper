@@ -283,6 +283,6 @@ func (p *pluginManager) pluginMetric(method string, latency time.Duration, err e
 		PluginName: p.pluginName,
 		MethodName: method,
 
-		Err: err,
+		Error: gatekeeper.NewError(err),
 	})
 }

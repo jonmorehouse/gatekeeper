@@ -81,7 +81,7 @@ func (p *proxier) Proxy(rw http.ResponseWriter,
 	finished:
 		metric.ProxyLatency = latency
 		metric.Response = resp
-		metric.Error = err
+		metric.Error = gatekeeper.NewError(err)
 		resp.Error = gatekeeper.NewError(err)
 
 		// in the rare case that a plugin failed and returned a nil

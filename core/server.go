@@ -175,7 +175,7 @@ func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	if s.stopAccepting {
 		resp := gatekeeper.NewErrorResponse(500, ServerShuttingDownError)
 		metric.Response = resp
-		metric.Error = ServerShuttingDownError
+		metric.Error = gatekeeper.NewError(ServerShuttingDownError)
 		s.writeError(rw, ServerShuttingDownError, req, resp)
 		return
 	}
@@ -187,11 +187,11 @@ func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	if err != nil {
 		resp := gatekeeper.NewErrorResponse(400, err)
 		metric.Response = resp
-		metric.Error = err
+		metric.Error = gatekeeper.NewError(err)
 		s.writeError(rw, err, req, resp)
 		return
 	}
-	metric.UpstreamMatcherLatency = time.Now().Sub(matchStartTS)
+	metric.RouterLatency = time.Now().Sub(matchStartTS)
 	metric.Upstream = upstream
 
 	// fetch a backend from the loadbalancer to proxy this request too
@@ -200,7 +200,7 @@ func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	if err != nil {
 		resp := gatekeeper.NewErrorResponse(500, err)
 		metric.Response = resp
-		metric.Error = err
+		metric.Error = gatekeeper.NewError(err)
 		s.writeError(rw, err, req, resp)
 		return
 	}
@@ -212,7 +212,7 @@ func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	if err != nil {
 		log.Println(err)
 		resp := gatekeeper.NewErrorResponse(500, err)
-		metric.Error = err
+		metric.Error = gatekeeper.NewError(err)
 		metric.Response = resp
 		s.writeError(rw, err, req, resp)
 		return
@@ -241,7 +241,7 @@ func (s *server) httpHandler(rw http.ResponseWriter, rawReq *http.Request) {
 	if err := s.proxier.Proxy(rw, rawReq, req, upstream, backend, metric); err != nil {
 		resp := gatekeeper.NewErrorResponse(500, err)
 		metric.Response = resp
-		metric.Error = err
+		metric.Error = gatekeeper.NewError(err)
 		s.writeError(rw, err, req, resp)
 		return
 	}
