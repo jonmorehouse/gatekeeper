@@ -9,6 +9,7 @@ import (
 
 	consul "github.com/hashicorp/consul/api"
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
+	"github.com/jonmorehouse/gatekeeper/gatekeeper/utils"
 	upstream_plugin "github.com/jonmorehouse/gatekeeper/plugin/upstream"
 )
 
@@ -24,7 +25,7 @@ func NewConsulUpstreams() upstream_plugin.Plugin {
 }
 
 type consulUpstreams struct {
-	manager gatekeeper.ServiceContainer
+	manager utils.ServiceContainer
 
 	// this is the last index from consul that we have updated against
 	consulConfig  *consul.Config
@@ -113,7 +114,7 @@ func (c *consulUpstreams) Configure(opts map[string]interface{}) error {
 func (c *consulUpstreams) SetManager(manager upstream_plugin.Manager) error {
 	c.Lock()
 	defer c.Unlock()
-	c.manager = gatekeeper.NewSyncedServiceContainer(manager)
+	c.manager = utils.NewSyncedServiceContainer(manager)
 	return nil
 }
 

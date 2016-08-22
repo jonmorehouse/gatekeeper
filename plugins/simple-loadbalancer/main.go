@@ -30,8 +30,8 @@ func (l *LoadBalancer) Heartbeat() error {
 	return nil
 }
 
-func (l *LoadBalancer) AddBackend(upstream gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
-	return l.services.AddBackend(upstream.ID, backend)
+func (l *LoadBalancer) AddBackend(upstreamID gatekeeper.UpstreamID, backend *gatekeeper.Backend) error {
+	return l.services.AddBackend(upstreamID, backend)
 }
 
 func (l *LoadBalancer) RemoveBackend(backend *gatekeeper.Backend) error {
@@ -39,8 +39,11 @@ func (l *LoadBalancer) RemoveBackend(backend *gatekeeper.Backend) error {
 }
 
 func (l *LoadBalancer) GetBackend(upstreamID gatekeeper.UpstreamID) (*gatekeeper.Backend, error) {
-	backends := l.services.FetchBackends(upstreamID)
-	return backends[rand.Int(len(backends))], nil
+	backends, err := l.services.FetchBackends(upstreamID)
+	if err != nil {
+		return nil, err
+	}
+	return backends[rand.Intn(len(backends))], nil
 }
 
 func main() {

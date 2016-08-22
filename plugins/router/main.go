@@ -31,22 +31,22 @@ func (r *router) AddUpstream(upstream *gatekeeper.Upstream) error {
 }
 
 // remove an upstream from the upstream container
-func (r *router) RemoveUpstream(upstreamID *gatekeepr.UpstreamID) error {
+func (r *router) RemoveUpstream(upstreamID gatekeeper.UpstreamID) error {
 	return r.upstreams.RemoveUpstream(upstreamID)
 }
 
 // route a request, returning the correct upstream if one matches for the request
 func (r *router) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
-	upstream, err := r.upstreams.UpstreamsByPrefix(req.Prefix)
+	upstream, err := r.upstreams.UpstreamByPrefix(req.Prefix)
 	if err == nil {
 		req.Path = req.PrefixlessPath
-		req.UpstreamMatchType = PrefixUpstreamMatch
+		req.UpstreamMatchType = gatekeeper.PrefixUpstreamMatch
 		return upstream, req, nil
 	}
 
-	upstream, err = r.upstreams.UpstreamsByHostname(req.Host)
+	upstream, err = r.upstreams.UpstreamByHostname(req.Host)
 	if err == nil {
-		req.UpstreamMatchType = HostnameUpstreamMatch
+		req.UpstreamMatchType = gatekeeper.HostnameUpstreamMatch
 		return upstream, req, nil
 	}
 
