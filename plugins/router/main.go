@@ -35,6 +35,7 @@ func (r *router) RemoveUpstream(upstreamID *gatekeepr.UpstreamID) error {
 	return r.upstreams.RemoveUpstream(upstreamID)
 }
 
+// route a request, returning the correct upstream if one matches for the request
 func (r *router) RouteRequest(req *gatekeeper.Request) (*gatekeeper.Upstream, *gatekeeper.Request, error) {
 	upstream, err := r.upstreams.UpstreamsByPrefix(req.Prefix)
 	if err == nil {
