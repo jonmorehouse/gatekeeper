@@ -3,7 +3,6 @@ package core
 import (
 	"log"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
@@ -11,7 +10,8 @@ import (
 )
 
 type UpstreamManager interface {
-	startStopper
+	starter
+	stopper
 	upstream_plugin.Manager
 }
 
@@ -36,11 +36,11 @@ type upstreamManager struct {
 
 	metricWriter MetricWriterClient
 
-	sync.Mutex
+	RWMutex
 }
 
-func (m *upstreamManager) Start() error             { return nil }
-func (m *upstreamManager) Stop(time.Duration) error { return nil }
+func (m *upstreamManager) Start() error { return nil }
+func (m *upstreamManager) Stop() error  { return nil }
 
 func (m *upstreamManager) AddUpstream(upstream *gatekeeper.Upstream) error {
 	m.Lock()

@@ -1,6 +1,9 @@
 package gatekeeper
 
-import "time"
+import (
+	"runtime"
+	"time"
+)
 
 // Metric is the general type that all metrics implement
 type Metric interface{}
@@ -50,8 +53,8 @@ type EventMetric struct {
 // internal state of the application. Specifically, this is an internal
 // mechanism for exposing pprof data to the metrics plugin.
 type ProfilingMetric struct {
-	// TODO: add in pprof internally
 	Timestamp time.Time
+	MemStats  runtime.MemStats
 }
 
 type PluginResponse uint
@@ -73,7 +76,7 @@ type PluginMetric struct {
 	PluginName string
 	MethodName string
 
-	Err error // an error that may or may not have arisen
+	Error *Error // an error that may or may not have arisen
 }
 
 // RequestMetrics provide the most granular insight into a request and are
@@ -95,20 +98,28 @@ type RequestMetric struct {
 	RequestEndTS   time.Time
 
 	// Latencies
-	Latency                time.Duration
-	InternalLatency        time.Duration // total local latency, including
-	ProxyLatency           time.Duration // total latency actually proxying the request
-	UpstreamMatcherLatency time.Duration // total latency matching the request to an upstream
+	Latency           time.Duration
+	InternalLatency   time.Duration // total local latency, including
+	DNSLookupLatency  time.Duration
+	TCPConnectLatency time.Duration
+	ProxyLatency      time.Duration
+
+	// Connection meta inforamtion
+	DNSLookup    bool
+	ConnReused   bool
+	ConnWasIdle  bool
+	ConnIdleTime time.Duration
 
 	// Plugin Latencies
+	RouterLatency                time.Duration
 	LoadBalancerLatency          time.Duration
-	RequestModifierLatency       time.Duration
 	ResponseModifierLatency      time.Duration
+	RequestModifierLatency       time.Duration
 	ErrorResponseModifierLatency time.Duration
 
 	// Any sort of error that could have been bubbled up throughout the
 	// request path
-	Error error
+	Error *Error
 }
 
 // UpstreamMetrics are useful for garnering granular metrics on particular

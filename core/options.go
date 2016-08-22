@@ -57,9 +57,14 @@ type Options struct {
 	HTTPSInternal     bool
 	HTTPSInternalPort uint
 
-	// Default timeout for upstream requests
-	DefaultProxyTimeout time.Duration
-	PluginTimeout       time.Duration
+	// Default proxying behavior
+	DefaultProxyTimeout      time.Duration
+	DefaultTCPConnectTimeout time.Duration
+	DefaultDNSTimeout        time.Duration
+
+	// Internal configuration
+	PluginTimeout    time.Duration
+	ProfilerInterval time.Duration
 }
 
 func ValidatePlugins(rawCmds []string) ([]string, error) {
@@ -77,9 +82,4 @@ func ValidatePlugins(rawCmds []string) ([]string, error) {
 	}
 
 	return cmds, nil
-}
-
-func (o *Options) Validate() error {
-	// Not implemented yet
-	return nil
 }

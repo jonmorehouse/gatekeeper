@@ -2,7 +2,6 @@ package core
 
 import (
 	"log"
-	"sync"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 	loadbalancer_plugin "github.com/jonmorehouse/gatekeeper/plugin/loadbalancer"
@@ -13,7 +12,8 @@ type LoadBalancerClient interface {
 }
 
 type LoadBalancer interface {
-	startStopper
+	starter
+	stopper
 
 	LoadBalancerClient
 }
@@ -30,7 +30,7 @@ type localLoadBalancer struct {
 
 	Subscriber
 
-	sync.RWMutex
+	RWMutex
 }
 
 func (l *localLoadBalancer) Start() error {

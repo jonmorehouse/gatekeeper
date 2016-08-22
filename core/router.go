@@ -2,7 +2,6 @@ package core
 
 import (
 	"log"
-	"sync"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
 	router_plugin "github.com/jonmorehouse/gatekeeper/plugin/router"
@@ -13,7 +12,7 @@ type RouterClient interface {
 }
 
 type Router interface {
-	startStopper
+	starter
 
 	RouterClient
 }
@@ -36,7 +35,7 @@ type localRouter struct {
 	listenerID  ListenerID
 	eventCh     EventCh
 
-	sync.RWMutex
+	RWMutex
 
 	upstreams     map[gatekeeper.UpstreamID]*gatekeeper.Upstream
 	prefixCache   map[string]*gatekeeper.Upstream

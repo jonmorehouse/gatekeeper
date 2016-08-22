@@ -1,10 +1,6 @@
 package core
 
-import (
-	"time"
-
-	"github.com/jonmorehouse/gatekeeper/gatekeeper"
-)
+import "github.com/jonmorehouse/gatekeeper/gatekeeper"
 
 type ModifierClient interface {
 	ModifyRequest(*gatekeeper.Request) (*gatekeeper.Request, error)
@@ -13,7 +9,8 @@ type ModifierClient interface {
 }
 
 type Modifier interface {
-	startStopper
+	starter
+	stopper
 	ModifierClient
 }
 
@@ -23,8 +20,8 @@ func NewLocalModifier() Modifier {
 
 type localModifier struct{}
 
-func (*localModifier) Start() error             { return nil }
-func (*localModifier) Stop(time.Duration) error { return nil }
+func (*localModifier) Start() error { return nil }
+func (*localModifier) Stop() error  { return nil }
 
 func (*localModifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
 	return req, nil
@@ -48,8 +45,8 @@ type pluginModifier struct {
 	pluginManagers []PluginManager
 }
 
-func (r *pluginModifier) Start() error             { return nil }
-func (r *pluginModifier) Stop(time.Duration) error { return nil }
+func (r *pluginModifier) Start() error { return nil }
+func (r *pluginModifier) Stop() error  { return nil }
 
 func (r *pluginModifier) ModifyRequest(req *gatekeeper.Request) (*gatekeeper.Request, error) {
 	var modifiedReq *gatekeeper.Request

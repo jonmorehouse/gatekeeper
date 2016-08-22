@@ -3,50 +3,55 @@ package core
 import (
 	"bytes"
 	"errors"
-	"sync"
+	"reflect"
 )
 
-var InternalError = errors.New("internal error")
+var (
+	InternalError = errors.New("internal error")
 
-var PluginTimeoutErr = errors.New("plugin timeout error")
-var InternalPluginError = errors.New("internal plugin error")
-var InternalTimeoutError = errors.New("internal timeout error")
-var InternalBroadcastError = errors.New("internal broadcast error")
-var InternalEventListenerError = errors.New("internal event listener error")
-var InvalidEventError = errors.New("invalid event error")
-var UnsubscribedEventError = errors.New("unsubscribed event error")
-var RouteNotFoundError = errors.New("No route found error")
-var InvalidUpstreamEventErr = errors.New("invalid upstream event")
+	// Plugin Specific Errors
+	PluginTimeoutErr           = errors.New("plugin timeout error")
+	InternalPluginError        = errors.New("internal plugin error")
+	InternalTimeoutError       = errors.New("internal timeout error")
+	InternalBroadcastError     = errors.New("internal broadcast error")
+	InternalEventListenerError = errors.New("internal event listener error")
+	InvalidEventError          = errors.New("invalid event error")
+	UnsubscribedEventError     = errors.New("unsubscribed event error")
+	RouteNotFoundError         = errors.New("No route found error")
+	InvalidUpstreamEventErr    = errors.New("invalid upstream event")
 
-var ConfigurationError = errors.New("invalid configuration")
+	// Configuration error
+	ConfigurationError = errors.New("invalid configuration")
 
-var ServerShuttingDownError = errors.New("server shutting down")
-var ResponseWriteError = errors.New("response write error")
+	// Specific errors
+	ServerShuttingDownError = errors.New("server shutting down")
+	ResponseWriteError      = errors.New("response write error")
 
-var UpstreamNotFoundError = errors.New("upstream not found")
-var UpstreamDuplicateIDError = errors.New("duplicate upstream ID error")
+	UpstreamNotFoundError    = errors.New("upstream not found")
+	UpstreamDuplicateIDError = errors.New("duplicate upstream ID error")
 
-var BackendDuplicateIDError = errors.New("duplicate backend ID error")
-var BackendNotFoundError = errors.New("backend not found")
-var BackendAddressError = errors.New("invalid backend address error")
-var NoBackendsFoundError = errors.New("no upstream backends found")
-var OrphanedBackendError = errors.New("orphaned backend error")
+	BackendDuplicateIDError = errors.New("duplicate backend ID error")
+	BackendNotFoundError    = errors.New("backend not found")
+	BackendAddressError     = errors.New("invalid backend address error")
+	NoBackendsFoundError    = errors.New("no upstream backends found")
+	OrphanedBackendError    = errors.New("orphaned backend error")
 
-var InternalProxierError = errors.New("internal proxier error")
-var LoadBalancerPluginError = errors.New("load balancer plugin error")
-var ModifierPluginError = errors.New("modifier plugin error")
-var ProxyTimeoutError = errors.New("proxy timeout error")
+	InternalProxierError    = errors.New("internal proxier error")
+	LoadBalancerPluginError = errors.New("load balancer plugin error")
+	ModifierPluginError     = errors.New("modifier plugin error")
+	ProxyTimeoutError       = errors.New("proxy timeout error")
 
-var InvalidEventErr = errors.New("invalid event error")
-var InvalidPluginErr = errors.New("invalid plugin type error")
-var DuplicateUpstreamErr = errors.New("duplicate upstream error")
-var DuplicateBackendErr = errors.New("duplicate backend error")
-var BackendAddressErr = errors.New("invalid backend error")
+	InvalidEventErr      = errors.New("invalid event error")
+	InvalidPluginErr     = errors.New("invalid plugin type error")
+	DuplicateUpstreamErr = errors.New("duplicate upstream error")
+	DuplicateBackendErr  = errors.New("duplicate backend error")
+	BackendAddressErr    = errors.New("invalid backend error")
+)
 
 // goroutine safe error implementing type for managing multiple errors
 type MultiError struct {
 	errs []error
-	sync.RWMutex
+	RWMutex
 }
 
 func NewMultiError() *MultiError {
@@ -56,6 +61,10 @@ func NewMultiError() *MultiError {
 }
 
 func (m *MultiError) Add(err error) {
+	if err == nil || reflect.ValueOf(err).IsNil() {
+		return
+	}
+
 	m.Lock()
 	defer m.Unlock()
 	m.errs = append(m.errs, err)

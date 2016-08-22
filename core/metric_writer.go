@@ -20,7 +20,8 @@ type MetricWriterClient interface {
 }
 
 type MetricWriter interface {
-	startStopper
+	starter
+	stopper
 
 	AddPlugin(PluginManager)
 	MetricWriterClient
@@ -73,7 +74,7 @@ type metricWriter struct {
 	doneCh   chan struct{}
 	bufferCh chan gatekeeper.Metric
 
-	sync.RWMutex
+	RWMutex
 }
 
 func (m *metricWriter) Start() error {
@@ -81,7 +82,7 @@ func (m *metricWriter) Start() error {
 	return nil
 }
 
-func (m *metricWriter) Stop(duration time.Duration) error { return nil }
+func (m *metricWriter) Stop() error { return nil }
 
 func (m *metricWriter) AddPlugin(plugin PluginManager) {
 	m.Lock()

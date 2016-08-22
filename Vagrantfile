@@ -45,11 +45,12 @@ Vagrant.configure("2") do |config|
       which go 2>&1 > /dev/null
       if [[ $? -ne 0 ]];then
         echo "installed go ..."
-        curl https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+        curl https://storage.googleapis.com/golang/go1.7.0.linux-amd64.tar.gz | tar -C /usr/local -xzf -
         echo "installing go binaries into /usr/local/bin/ ..."
         ln -s /usr/local/go/bin/go /usr/local/bin/go
         ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
         ln -s /usr/local/go/bin/godoc /usr/local/bin/godoc
+        chmod +x /usr/local/bin/*
       fi
 
       if [[ ! -d /gopath ]];then

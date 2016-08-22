@@ -4,7 +4,6 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jonmorehouse/gatekeeper/gatekeeper"
@@ -18,7 +17,7 @@ import (
 type PluginManager interface {
 	Build() error
 	Start() error
-	Stop(time.Duration) error
+	Stop() error
 
 	// Call a method on the plugin instance with additional robustness and
 	// metrics emitted to the metricWriter. This supports retries and
@@ -78,9 +77,9 @@ type pluginManager struct {
 	stopCh chan struct{}
 	doneCh chan struct{}
 
-	sync.RWMutex
+	RWMutex
 
-	baseStartStopper
+	SyncStartStopper
 	HookManager
 }
 
@@ -92,19 +91,19 @@ func (p *pluginManager) Build() error {
 }
 
 func (p *pluginManager) Start() error {
-	return p.syncStart(func() error {
+	return p.SyncStart(func() error {
 		if err := p.startInstance(); err != nil {
 			return err
 		}
 		p.HookManager.AddHook(p.heartbeatInterval, p.heartbeat)
-		return p.HookManager.Start()
+		return nil
 	})
 }
 
-func (p *pluginManager) Stop(dur time.Duration) error {
-	return p.syncStop(func() error {
+func (p *pluginManager) Stop() error {
+	return p.SyncStop(func() error {
 		errs := NewMultiError()
-		if err := p.HookManager.Stop(dur); err != nil {
+		if err := p.HookManager.Stop(); err != nil {
 			errs.Add(err)
 		}
 
@@ -128,7 +127,6 @@ func (p *pluginManager) Stop(dur time.Duration) error {
 		}
 
 		return errs.ToErr()
-
 	})
 }
 
@@ -285,6 +283,6 @@ func (p *pluginManager) pluginMetric(method string, latency time.Duration, err e
 		PluginName: p.pluginName,
 		MethodName: method,
 
-		Err: err,
+		Error: gatekeeper.NewError(err),
 	})
 }
