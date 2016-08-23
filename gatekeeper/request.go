@@ -77,7 +77,7 @@ func NewRequest(req *http.Request, protocol Protocol) *Request {
 		RawQuery: req.URL.RawQuery,
 		Fragment: req.URL.Fragment,
 
-		Header: req.Header,
+		Header: http.Header(req.Header),
 		Error:  nil,
 	}
 }
