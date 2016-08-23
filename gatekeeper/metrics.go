@@ -113,8 +113,8 @@ type RequestMetric struct {
 	// Plugin Latencies
 	RouterLatency                time.Duration
 	LoadBalancerLatency          time.Duration
-	ResponseModifierLatency      time.Duration
 	RequestModifierLatency       time.Duration
+	ResponseModifierLatency      time.Duration
 	ErrorResponseModifierLatency time.Duration
 
 	// Any sort of error that could have been bubbled up throughout the
