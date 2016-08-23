@@ -41,7 +41,7 @@ type Request struct {
 	RawQuery string
 	// url.URL.Fragment
 	Fragment string
-	Header   map[string][]string
+	Header   http.Header
 
 	// at any point of the request lifecycle, a RequestError will result in
 	// an error response being sent back to the client.
