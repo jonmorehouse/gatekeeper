@@ -22,6 +22,9 @@ script:
   - ./scripts/test.sh plugin/router
 
   # plugin tests
-  - ./scripts/test.sh plugins/mysql-api-upstreams
-  - ./scripts/test.sh plugins/simple-loadbalancer
-  - ./scripts/test.sh plugins/static-upstreams
+  - ./scripts/test.sh plugins/consul-loadbalancer
+  - ./scripts/test.sh plugins/docker-upstreams
+  - ./scripts/test.sh plugins/dogstatsd-metrics
+  - ./scripts/test.sh plugins/local-api-upstreams
+  - ./scripts/test.sh plugins/local-metrics
+  - ./scripts/test.sh plugins/modifier
