@@ -14,6 +14,10 @@ echo -e "installing godeps from $DIR/Godeps ..."
 cd $DIR
 curl -s https://raw.githubusercontent.com/pote/gpm/v1.4.0/bin/gpm | bash
 
+echo -e "installing additional deps required for docker/go-engine dependency ..."
+cd $GOPATH/src/github.com/docker/go-engine
+make deps
+
 echo -e "symlinking local copy into \$GOPATH/src/github.com/jonmorehouse/gatekeeper"
 if [ ! -d $GOPATH/src/github.com/jonmorehouse/gatekeeper ]; then
   mkdir -p $GOPATH/src/github.com/jonmorehouse

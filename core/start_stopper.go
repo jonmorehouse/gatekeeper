@@ -28,13 +28,17 @@ func filterStarters(input []interface{}, cb func(starter) error) error {
 	return errs.ToErr()
 }
 
-func filterStoppers(input []interface{}, cb func(stopper) error) error {
+func filterStoppers(input []interface{}, errorHandler ErrorHandler, cb func(stopper) error) error {
 	errs := NewMultiError()
 
 	for _, item := range input {
 		if i, ok := item.(stopper); ok {
 			if err := cb(i); err != nil {
 				errs.Add(err)
+
+				if errorHandler != ContinueOnError {
+					return errs.ToErr()
+				}
 			}
 		}
 	}

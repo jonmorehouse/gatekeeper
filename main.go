@@ -33,12 +33,12 @@ func parseFlags(options *core.Options) error {
 	loadBalancerPlugin := commandLine.String("loadbalancer-plugin", "simple-loadbalancer", "loadbalancer-plugin cmd. default: simple-loadbalancer")
 
 	useLocalRouter := commandLine.Bool("local-router", true, "use the provided in process router. default: false")
-	routerPlugin := commandLine.String("router-plugin", "example-router", "router-plugin cmd. default: example-router")
+	routerPlugin := commandLine.String("router-plugin", "router", "router-plugin cmd. default: example-router")
 
 	// accept comma delimited lists of plugins for metric, upstream and modifier plugins
 	upstreamPlugins := commandLine.String("upstream-plugins", "static-upstreams", "comma-delimited upstream-plugin cmds. default: static-upstreams")
 	metricPlugins := commandLine.String("metric-plugins", "metric-logger", "comma-delimited metric-plugin cmds. default: metric-plugins")
-	modifierPlugins := commandLine.String("modifier-plugins", "example-modifier", "comma-delimited modifier-plugin cmds. default: example-modifier")
+	modifierPlugins := commandLine.String("modifier-plugins", "modifier", "comma-delimited modifier-plugin cmds. default: example-modifier")
 
 	// server configuration
 	httpPublic := commandLine.Bool("http-public", true, "http-public enabled. default: true")
@@ -57,6 +57,7 @@ func parseFlags(options *core.Options) error {
 	pluginTimeout := commandLine.Duration("plugin-timeout", 10*time.Millisecond, "plugin call timeout. default 10ms")
 	proxyTimeout := commandLine.Duration("default-proxy-timeout", 5*time.Second, "default proxy request timeout. default 5s")
 
+	profilerInterval := commandLine.Duration("profiler-interval", 10*time.Second, "plugin profiler interval. default 10s")
 	metricBufferSize := commandLine.Uint("metric-buffer-size", 10000, "metric buffer size")
 	metricFlushInterval := commandLine.Duration("metrif-flush-interval", 100*time.Millisecond, "max interval between metric flushes")
 
@@ -173,7 +174,9 @@ func parseFlags(options *core.Options) error {
 	options.HTTPSInternal = *httpsInternal
 	options.HTTPSInternalPort = *httpsInternalPort
 	options.DefaultProxyTimeout = *proxyTimeout
+
 	options.PluginTimeout = *pluginTimeout
+	options.ProfilerInterval = *profilerInterval
 
 	options.MetricBufferSize = *metricBufferSize
 	options.MetricFlushInterval = *metricFlushInterval

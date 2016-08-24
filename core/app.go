@@ -89,7 +89,7 @@ func (a *App) Start() error {
 
 	// start each of the plugins; handling the case of an upstream plugin particularly carefully.
 	types := []PluginType{MetricPlugin, ModifierPlugin, LoadBalancerPlugin, RouterPlugin, UpstreamPlugin}
-	err := syncPluginFilter(a.plugins, types, func(manager PluginManager) error {
+	err := syncPluginFilter(a.plugins, types, StopOnError, func(manager PluginManager) error {
 		if err := manager.Build(); err != nil {
 			return err
 		}
@@ -107,8 +107,9 @@ func (a *App) Start() error {
 			}
 		}
 
+		// add the plugin to the metricWriter to receive metrics in the metric stream
 		a.metricWriter.AddPlugin(manager)
-		return nil
+		return manager.Start()
 	})
 	if err != nil {
 		return err
@@ -119,7 +120,7 @@ func (a *App) Start() error {
 		return err
 	}
 
-	return filterServers(a.servers, nil, func(i Server) error {
+	return filterServers(a.servers, nil, StopOnError, func(i Server) error {
 		return i.Start()
 	})
 }
@@ -129,7 +130,7 @@ func (a *App) Stop(duration time.Duration) error {
 	errs := NewMultiError()
 
 	// stop servers
-	errs.Add(filterServers(a.servers, nil, func(server Server) error {
+	errs.Add(filterServers(a.servers, nil, ContinueOnError, func(server Server) error {
 		return server.Stop(duration)
 	}))
 
@@ -143,7 +144,8 @@ func (a *App) Stop(duration time.Duration) error {
 	errs.Add(filterGracefulStoppers(a.components, func(i gracefulStopper) error {
 		return i.Stop(duration)
 	}))
-	errs.Add(filterStoppers(a.components, func(i stopper) error {
+
+	errs.Add(filterStoppers(a.components, ContinueOnError, func(i stopper) error {
 		return i.Stop()
 	}))
 

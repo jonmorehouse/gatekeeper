@@ -32,5 +32,6 @@ func (rw *RWMutex) log(action string, cb func()) {
 	startTS := time.Now()
 	cb()
 	latency := time.Now().Sub(startTS)
+	return
 	log.Println(fmt.Sprintf("Mutex Operation: action=%s latency=%s", action, latency))
 }

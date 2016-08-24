@@ -16,7 +16,7 @@ var (
 )
 
 type config struct {
-	ConfigPath string `field:"upstream-config" required:"true"`
+	ConfigPath string `flag:"upstream-config" required:"true"`
 }
 
 func newUpstreamPlugin() upstream_plugin.Plugin {

@@ -18,6 +18,10 @@ type syncStartStopper struct {
 	RWMutex
 }
 
+func (b *syncStartStopper) Started() bool {
+	return b.started
+}
+
 func (b *syncStartStopper) SyncStart(cb func() error) error {
 	b.RLock()
 	started := b.started

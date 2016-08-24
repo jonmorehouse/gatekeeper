@@ -39,6 +39,7 @@ func NewHTTPServer(protocol gatekeeper.Protocol, port uint, router RouterClient,
 			},
 			NoSignalHandling: true,
 		},
+		SyncStartStopper: &syncStartStopper{},
 	}
 	mux.HandleFunc("/", instance.httpHandler)
 	return instance
@@ -67,6 +68,7 @@ func NewHTTPSServer(protocol gatekeeper.Protocol, port uint, router RouterClient
 			},
 			NoSignalHandling: true,
 		},
+		SyncStartStopper: &syncStartStopper{},
 	}
 
 	mux.HandleFunc("/", instance.httpHandler)

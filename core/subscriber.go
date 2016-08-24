@@ -15,13 +15,15 @@ type Subscriber interface {
 
 func NewSubscriber(broadcaster Broadcaster) Subscriber {
 	return &subscriber{
-		hooks:       make(map[gatekeeper.Event][]func(*UpstreamEvent)),
+		hooks:	     make(map[gatekeeper.Event][]func(*UpstreamEvent)),
 		broadcaster: broadcaster,
+		stopCh:      make(chan struct{}, 1),
+		doneCh:      make(chan error, 1),
 	}
 }
 
 type subscriber struct {
-	hooks       map[gatekeeper.Event][]func(*UpstreamEvent)
+	hooks	    map[gatekeeper.Event][]func(*UpstreamEvent)
 	broadcaster Broadcaster
 
 	doneCh chan error
@@ -43,9 +45,9 @@ func (s *subscriber) Stop() error {
 func (s *subscriber) AddUpstreamEventHook(event gatekeeper.Event, hook func(*UpstreamEvent)) error {
 	// make sure that the event type is of an actual upstream event ...
 	if _, ok := map[gatekeeper.Event]struct{}{
-		gatekeeper.UpstreamAddedEvent:   struct{}{},
+		gatekeeper.UpstreamAddedEvent:	 struct{}{},
 		gatekeeper.UpstreamRemovedEvent: struct{}{},
-		gatekeeper.BackendAddedEvent:    struct{}{},
+		gatekeeper.BackendAddedEvent:	 struct{}{},
 		gatekeeper.BackendRemovedEvent:  struct{}{},
 	}[event]; !ok {
 		return InvalidEventErr
@@ -99,22 +101,20 @@ func (s *subscriber) worker() {
 	}
 
 	go func() {
-		var stopped bool
 		for {
 			select {
 			case <-s.stopCh:
-				stopped = true
+				goto stop
 			case event, _ := <-eventCh:
 				handler(event)
 			default:
 			}
-
-			if stopped {
-				s.broadcaster.RemoveListener(listenerID)
-				close(eventCh)
-			}
 		}
 
+	stop:
+		s.broadcaster.RemoveListener(listenerID)
+		close(eventCh)
+		// finish any outstanding hooks
 		wg.Wait()
 		s.doneCh <- errs.ToErr()
 	}()

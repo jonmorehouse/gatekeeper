@@ -1,7 +1,6 @@
 package core
 
 import (
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -54,7 +53,8 @@ func NewPluginManager(cmd string, args map[string]interface{}, pluginType Plugin
 		stopCh: make(chan struct{}),
 		doneCh: make(chan struct{}),
 
-		HookManager: NewHookManager(),
+		SyncStartStopper: &syncStartStopper{},
+		HookManager:      NewHookManager(),
 	}
 }
 
@@ -143,7 +143,7 @@ func (p *pluginManager) Grab(cb func(Plugin)) {
 // instead relies upon the callback returning Nil or a real error before
 // proceeding forward.
 func (p *pluginManager) Call(method string, cb func(Plugin) error) error {
-	log.Println("Plugin.Call method:", method, " type: ", p.pluginType.String())
+	//log.Println("Plugin.Call method:"+method, " type:"+p.pluginType.String())
 	calls := 0
 	defer func() {
 		if calls > 1 {
@@ -172,7 +172,7 @@ func (p *pluginManager) Call(method string, cb func(Plugin) error) error {
 }
 
 func (p *pluginManager) CallOnce(method string, cb func(Plugin) error) error {
-	log.Println("Plugin.CallOnce method:", method, " type: ", p.pluginType.String())
+	//log.Println("Plugin.CallOnce method:"+method, " type:"+p.pluginType.String())
 	err, ok := CallWithTimeout(p.callTimeout, func() error {
 		p.RLock()
 		defer p.RUnlock()

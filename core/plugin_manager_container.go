@@ -74,7 +74,7 @@ func asyncPluginFilter(plugins PluginManagerContainer, typs []PluginType, cb fun
 	return errs.ToErr()
 }
 
-func syncPluginFilter(plugins PluginManagerContainer, typs []PluginType, cb func(PluginManager) error) error {
+func syncPluginFilter(plugins PluginManagerContainer, typs []PluginType, errorHandler ErrorHandler, cb func(PluginManager) error) error {
 	if typs == nil {
 		typs = allPluginTypes
 	}
@@ -89,9 +89,14 @@ func syncPluginFilter(plugins PluginManagerContainer, typs []PluginType, cb func
 		}
 
 		for _, manager := range managers {
-			errs.Add(cb(manager))
+			if err := cb(manager); err != nil {
+				errs.Add(err)
+				if errorHandler != ContinueOnError {
+					goto done
+				}
+			}
 		}
 	}
-
+done:
 	return errs.ToErr()
 }

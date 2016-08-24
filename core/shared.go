@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type ErrorHandler uint
+
+const (
+	ContinueOnError ErrorHandler = iota + 1
+	StopOnError
+)
+
 func InStrList(value string, list []string) bool {
 	for _, item := range list {
 		if value == item {
