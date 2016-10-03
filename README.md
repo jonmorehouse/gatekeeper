@@ -5,7 +5,7 @@ Plugin-based http(s) communications.
 * current release: https://github.com/jonmorehouse/gatekeeper/releases/0.0.1
 
 
-[![build status](https://travis-ci.org/jonmorehouse/gatekeeper.svg?branch=master)]() [![GitHub release](https://img.shields.io/github/release/jonmorehouse/gatekeeper.svg?maxAge=2592000)]()[![Docker Pulls](https://img.shields.io/docker/pulls/jonmorehouse/gatekeeper.svg?maxAge=2592000)]()
+[![build status](https://travis-ci.org/jonmorehouse/gatekeeper.svg?branch=master)]() [![GitHub release](https://img.shields.io/github/release/jonmorehouse/gatekeeper.svg?maxAge=2592000)]()[![Docker Pulls](https://img.shields.io/docker/pulls/jonmorehouse/gatekeeper.svg?maxAge=2592000)]() [![](https://images.microbadger.com/badges/image/jonmorehouse/gatekeeper.svg)](https://microbadger.com/images/jonmorehouse/gatekeeper "Get your own image badge on microbadger.com")
 
 **Disclaimer** this isn't real software yet! Follow along at https://github.com/jonmorehouse/gatekeeper/pulls
 
@@ -216,3 +216,4 @@ Finally, during a request's lifecycle, the router is called to "get" a backend. 
 
 # Other
 
+ 
